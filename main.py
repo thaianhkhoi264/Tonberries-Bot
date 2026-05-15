@@ -40,6 +40,8 @@ async def on_message(message: discord.Message):
         await _cmd_pending(message)
     elif cmd == "restart":
         await _cmd_restart(message)
+    elif cmd == "shutdown":
+        await _cmd_shutdown(message)
     # Unknown commands are silently ignored
 
 
@@ -49,11 +51,12 @@ async def on_message(message: discord.Message):
 
 async def _cmd_help(message: discord.Message):
     text = (
-        "**Tonberries-Bot commands** (DM only)\n\n"
+        "**Dia's commands!**\n\n"
         "`help` — Show this message\n"
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
-        "`restart` — Restart the bot (handled by systemd)"
+        "`restart` — Restart Dia :(\n"
+        "`shutdown` — Stop Dia in case she spammed..."
     )
     await message.channel.send(text)
 
@@ -81,6 +84,13 @@ async def _cmd_pending(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Pending command failed: {exc}")
         await message.channel.send(f"Error fetching pending notifications: {exc}")
+
+
+async def _cmd_shutdown(message: discord.Message):
+    await message.channel.send("Shutting down. Use `sudo systemctl start tonberries-bot` to bring me back.")
+    logger.info("[Bot] Shutdown requested by owner")
+    await bot.close()
+    sys.exit(0)  # Exit code 0 — systemd Restart=on-failure will NOT restart
 
 
 async def _cmd_restart(message: discord.Message):
