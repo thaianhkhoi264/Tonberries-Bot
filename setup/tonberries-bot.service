@@ -1,0 +1,15 @@
+[Unit]
+Description=Tonberries Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=piberry
+WorkingDirectory=/home/piberry/Tonberries-Bot
+ExecStart=/home/piberry/Tonberries-Bot/venv/bin/python main.py
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=/home/piberry/Tonberries-Bot/.env
+
+[Install]
+WantedBy=multi-user.target
