@@ -11,8 +11,9 @@ NOTIFICATION_CHANNEL_ID = 1504632023946625054  # Channel where notification mess
 # Absolute path to Gacha-Timer-Bot on the same Pi
 GACHA_BOT_DIR = "/home/piberry/Gacha-Timer-Bot"
 
-# Read-only access to Gacha-Timer-Bot's event database
+# Read-only access to Gacha-Timer-Bot's databases
 SHARED_EVENTS_DB      = f"{GACHA_BOT_DIR}/data/uma_musume_data.db"
+SHARED_NOTIF_DB       = f"{GACHA_BOT_DIR}/data/notification_data.db"
 # File written by Gacha-Timer-Bot's scraper; used as a refresh signal
 SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 

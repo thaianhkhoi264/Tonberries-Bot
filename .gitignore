@@ -7,3 +7,7 @@ __pycache__/
 *.log
 venv/
 *.claude/
+setup/
+_debug_db.py
+_debug_output.txt
+_debug2.py
