@@ -37,12 +37,6 @@ async def init_local_db():
                 PRIMARY KEY (event_id, channel_id)
             );
 
-            CREATE TABLE IF NOT EXISTS events_snapshot (
-                event_id   TEXT PRIMARY KEY,
-                start_date TEXT,
-                end_date   TEXT
-            );
-
             CREATE TABLE IF NOT EXISTS pending_notifications (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id         TEXT,
@@ -55,10 +49,6 @@ async def init_local_db():
                 phase            TEXT,
                 character_name   TEXT
             );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_notif
-                ON pending_notifications
-                (event_id, timing_type, notify_unix, phase, character_name);
         """)
         await conn.commit()
     logger.info("[UMA] Local database initialised")
@@ -394,6 +384,12 @@ async def _update_timers_impl(force_update: bool):
 # Background tasks
 # ---------------------------------------------------------------------------
 
+async def _delayed_notif_sync(delay: int = 60):
+    """Wait for Gacha's notification DB to settle, then sync."""
+    await asyncio.sleep(delay)
+    await notification_module.sync_notifications_from_gacha()
+
+
 async def scraper_file_watcher():
     """Polls SCRAPER_LAST_RUN_FILE every 60 s; refreshes when it changes."""
     last_seen = None
@@ -408,7 +404,7 @@ async def scraper_file_watcher():
                 last_seen = timestamp
                 logger.info("[UMA] Scraper signal detected — refreshing")
                 await uma_update_timers()
-                await notification_module.sync_notifications()
+                asyncio.create_task(_delayed_notif_sync())
         except Exception as exc:
             logger.error(f"[UMA] File watcher error: {exc}")
 
@@ -420,7 +416,7 @@ async def start_background_tasks():
     background loops.
     """
     await uma_update_timers()
-    await notification_module.sync_notifications_on_startup()
+    await notification_module.sync_notifications_from_gacha()
     asyncio.create_task(scraper_file_watcher())
     asyncio.create_task(notification_module.notification_loop())
     logger.info("[UMA] Background tasks started")
