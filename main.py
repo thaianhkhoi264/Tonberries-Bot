@@ -99,7 +99,24 @@ async def _cmd_shutdown(message: discord.Message):
 
 
 async def _cmd_circles(message: discord.Message):
-    await message.channel.send("Refreshing circle stats...")
+    await message.channel.send("Running scraper (may take ~30 seconds)...")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "circles_scraper.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace")[-1500:]
+            logger.error(f"[Bot] Scraper failed: {err}")
+            await message.channel.send(f"Scraper failed (exit {proc.returncode}):\n```\n{err}\n```")
+            return
+    except Exception as exc:
+        logger.error(f"[Bot] Scraper error: {exc}")
+        await message.channel.send(f"Scraper error: {exc}")
+        return
+
     try:
         await circles_module.post_or_edit(force=True)
         await message.channel.send("Circle stats refreshed.")
