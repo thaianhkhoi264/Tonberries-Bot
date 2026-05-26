@@ -11,3 +11,4 @@ setup/
 _debug_db.py
 _debug_output.txt
 _debug2.py
+tests/

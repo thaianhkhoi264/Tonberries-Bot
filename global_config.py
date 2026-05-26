@@ -19,3 +19,7 @@ SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 
 # Tonberries-Bot's own database (event message IDs + notification schedule)
 LOCAL_DB = "data/tonberries.db"
+
+# Circles scraper
+CIRCLE_ID  = "532127760"         # uma.moe circle ID for Tonberries
+CIRCLES_DB = "data/circles.db"  # written by circles_scraper.py
