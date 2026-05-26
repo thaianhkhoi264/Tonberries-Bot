@@ -154,14 +154,14 @@ def _member_status(monthly_gain: str | None) -> tuple[str, str]:
     remaining = monthly_target - gained
     if days_remaining > 0:
         daily_needed = math.ceil(remaining / days_remaining)
-        emoji = (
-            STATUS_EMOJIS["far_behind"]
-            if daily_needed >= STARE_THRESHOLD
-            else STATUS_EMOJIS["behind"]
-        )
+        if daily_needed >= STARE_THRESHOLD:
+            return (
+                f"Very behind — needs ~{daily_needed:,}/day for the remaining {days_remaining} days",
+                STATUS_EMOJIS["far_behind"],
+            )
         return (
             f"Behind — needs ~{daily_needed:,}/day for the remaining {days_remaining} days to hit the goal",
-            emoji,
+            STATUS_EMOJIS["behind"],
         )
 
     return (
