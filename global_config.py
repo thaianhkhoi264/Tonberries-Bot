@@ -21,5 +21,6 @@ SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 LOCAL_DB = "data/tonberries.db"
 
 # Circles scraper
-CIRCLE_ID  = "532127760"         # uma.moe circle ID for Tonberries
-CIRCLES_DB = "data/circles.db"  # written by circles_scraper.py
+CIRCLE_ID         = "532127760"          # uma.moe circle ID for Tonberries
+CIRCLES_DB        = "data/circles.db"   # written by circles_scraper.py
+CIRCLE_CHANNEL_ID = 1508622405357015190  # Channel where circle stats are posted

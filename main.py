@@ -7,6 +7,7 @@ from bot import bot, token, logger
 from global_config import OWNER_USER_IDS
 import uma_module
 import notification_module
+import circles_module
 
 
 # ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ async def on_ready():
     logger.info(f"[Bot] Logged in as {bot.user} (ID: {bot.user.id})")
     await uma_module.init_local_db()
     await uma_module.start_background_tasks()
+    await circles_module.start_background_task()
 
 
 @bot.event
@@ -42,6 +44,8 @@ async def on_message(message: discord.Message):
         await _cmd_restart(message)
     elif cmd == "shutdown":
         await _cmd_shutdown(message)
+    elif cmd == "circles":
+        await _cmd_circles(message)
     # Unknown commands are silently ignored
 
 
@@ -55,6 +59,7 @@ async def _cmd_help(message: discord.Message):
         "`help` — Show this message\n"
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
+        "`circles` — Force-refresh the club circle stats\n"
         "`restart` — Restart Dia :(\n"
         "`shutdown` — Stop Dia in case she spammed..."
     )
@@ -91,6 +96,16 @@ async def _cmd_shutdown(message: discord.Message):
     logger.info("[Bot] Shutdown requested by owner")
     await bot.close()
     sys.exit(0)  # Exit code 0 — systemd Restart=on-failure will NOT restart
+
+
+async def _cmd_circles(message: discord.Message):
+    await message.channel.send("Refreshing circle stats...")
+    try:
+        await circles_module.post_or_edit(force=True)
+        await message.channel.send("Circle stats refreshed.")
+    except Exception as exc:
+        logger.error(f"[Bot] Circles refresh failed: {exc}")
+        await message.channel.send(f"Circle refresh failed: {exc}")
 
 
 async def _cmd_restart(message: discord.Message):
