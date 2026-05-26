@@ -176,6 +176,7 @@ def _build_club_message(data: dict) -> str:
     needed_delta = data.get("neededDelta") or ""
     members      = data.get("members", [])
     emoji        = RANK_EMOJIS.get(tier, tier)
+    scraped_at   = data.get("scraped_at", 0)
 
     needed_int = int(needed.replace(",", "")) if needed != "N/A" else 0
     count      = len(members)
@@ -187,7 +188,8 @@ def _build_club_message(data: dict) -> str:
         f"# Club Monthly Fan Count\n"
         f"## Rank {emoji}\n"
         f"## Needed until rank {_next_rank_emoji(tier)}: {needed} / {per_member} per member"
-        f"{delta_line}"
+        f"{delta_line}\n"
+        f"-# Last updated <t:{scraped_at}:F> · <t:{scraped_at}:R>"
     )
 
 
