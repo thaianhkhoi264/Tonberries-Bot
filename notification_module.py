@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 
 import aiosqlite
@@ -7,6 +8,25 @@ import discord
 
 from bot import bot, logger
 from global_config import LOCAL_DB, SHARED_NOTIF_DB, NOTIFICATION_CHANNEL_ID
+
+# ---------------------------------------------------------------------------
+# Gacha message templates (kept in sync with Gacha-Timer-Bot's MESSAGE_TEMPLATES)
+# Used for template-based notifications when no custom_message is set.
+# ---------------------------------------------------------------------------
+
+_GACHA_TEMPLATES = {
+    "default":                                        "{role}, The {name} is {action} {time}!",
+    "uma_champions_meeting_registration_start":       "{role}, {name} Registration has started!",
+    "uma_champions_meeting_round1_start":             "{role}, {name} Round 1 has started!",
+    "uma_champions_meeting_round2_start":             "{role}, {name} Round 2 has started!",
+    "uma_champions_meeting_final_registration_start": "{role}, {name} Final Registration has started!",
+    "uma_champions_meeting_finals_start":             "{role}, {name} Finals has started! Good luck!",
+    "uma_champions_meeting_end":                      "{role}, {name} has ended! Hope you got a good placement!",
+    "uma_champions_meeting_reminder":                 "{role}, {name} is starting in {time}!",
+    "uma_legend_race_character_start":                "{role}, {character}'s Legend Race has started!",
+    "uma_legend_race_end":                            "{role}, {name} has ended!",
+    "uma_legend_race_reminder":                       "{role}, {name} is starting in 1 day!",
+}
 
 # Lazy-initialised so the Lock is created after the event loop starts.
 _notif_lock: asyncio.Lock | None = None
@@ -17,6 +37,30 @@ def _get_lock() -> asyncio.Lock:
     if _notif_lock is None:
         _notif_lock = asyncio.Lock()
     return _notif_lock
+
+
+# ---------------------------------------------------------------------------
+# Role-mention stripping
+# ---------------------------------------------------------------------------
+
+def _strip_role_mentions(text: str) -> str:
+    """
+    Remove Discord role/everyone/here mentions and fix surrounding punctuation.
+    Leading  '@role, text' → 'Text'
+    Mid-text 'Hey @role, there' → 'Hey, there'
+    """
+    # Remove leading mention + optional trailing comma/whitespace
+    text = re.sub(r'^(?:<@&\d+>|@everyone|@here)[,\s]*', '', text)
+    # Remove any remaining mentions
+    text = re.sub(r'(?:<@&\d+>|@everyone|@here)', '', text)
+    # Clean up ' ,' → ',' and multiple spaces
+    text = re.sub(r'\s+,', ',', text)
+    text = re.sub(r' {2,}', ' ', text)
+    # Strip any leading punctuation/spaces left by an empty {role} substitution
+    text = text.lstrip(', ')
+    if text:
+        text = text[0].upper() + text[1:]
+    return text.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -33,18 +77,74 @@ def _build_message(row) -> str:
     t = f"<t:{event_time}:R>"
 
     if timing_type == "reminder":
-        return f"🐴 Reminder: **{title}** starts {t}!"
+        return f"🐴 Reminder: **{title}** starts {t}!" # Reminder Notifications
     if timing_type == "start":
-        return f"🐴 **{title}** is starting {t}!"
+        return f"🐴 **{title}** is starting {t}!" # Event Start notifications
     if timing_type == "end":
         if event_time <= int(datetime.now(timezone.utc).timestamp()) + 60:
-            return f"🐴 **{title}** has ended."
-        return f"🐴 **{title}** is ending {t}!"
+            return f"🐴 **{title}** has ended." # Event End Notifications
+        return f"🐴 **{title}** is ending {t}!" # Event Ending soon Notifications
     if timing_type == "phase_start" and phase:
-        return f"🐴 **{title}** — **{phase}** has started!"
+        return f"🐴 **{title}** — **{phase}** has started!" # CM notifications
     if timing_type == "character_start" and character_name:
-        return f"🐴 **{title}** — **{character_name}**'s round has started!"
+        return f"🐴 **{title}** — **{character_name}**'s round has started!" # LR notifications
     return f"🐴 **{title}** — {timing_type} <t:{event_time}:F>"
+
+
+async def _resolve_message(row) -> str:
+    """
+    Query Gacha's DB at fire time for the latest custom_message / message_template.
+    Falls back to _build_message() if the row is gone or has no override.
+    """
+    gacha_id = row["event_id"]
+    if not gacha_id:
+        return _build_message(row)
+
+    action = "ending" if row["timing_type"] == "end" else "starting"
+    kwargs = {
+        "role":      "",
+        "name":      row["title"] or "",
+        "category":  row["category"] or "",
+        "action":    action,
+        "time":      f"<t:{row['event_time_unix']}:R>",
+        "phase":     row["phase"] or "",
+        "character": row["character_name"] or "",
+    }
+
+    try:
+        async with aiosqlite.connect(SHARED_NOTIF_DB) as gacha:
+            gacha.row_factory = aiosqlite.Row
+            async with gacha.execute(
+                "SELECT custom_message, message_template "
+                "FROM pending_notifications WHERE id=?",
+                (gacha_id,),
+            ) as cur:
+                gacha_row = await cur.fetchone()
+    except Exception as exc:
+        logger.warning(f"[Notifications] Gacha DB lookup failed (id={gacha_id}): {exc}")
+        return _build_message(row)
+
+    if not gacha_row:
+        return _build_message(row)
+
+    custom = gacha_row["custom_message"]
+    template_key = gacha_row["message_template"]
+
+    if custom:
+        try:
+            msg = custom.format(**kwargs)
+        except (KeyError, IndexError):
+            msg = custom
+        return _strip_role_mentions(msg)
+
+    if template_key and template_key in _GACHA_TEMPLATES:
+        try:
+            msg = _GACHA_TEMPLATES[template_key].format(**kwargs)
+        except (KeyError, IndexError):
+            msg = _GACHA_TEMPLATES[template_key]
+        return _strip_role_mentions(msg)
+
+    return _build_message(row)
 
 
 async def _send_notification(row):
@@ -53,7 +153,7 @@ async def _send_notification(row):
         logger.error("[Notifications] Notification channel not found")
         return
     try:
-        await channel.send(_build_message(row))
+        await channel.send(await _resolve_message(row))
     except discord.DiscordException as exc:
         logger.error(f"[Notifications] Failed to send notification: {exc}")
 
@@ -74,7 +174,7 @@ async def sync_notifications_from_gacha():
         async with aiosqlite.connect(SHARED_NOTIF_DB) as gacha:
             gacha.row_factory = aiosqlite.Row
             async with gacha.execute(
-                "SELECT category, title, timing_type, notify_unix, "
+                "SELECT id, category, title, timing_type, notify_unix, "
                 "event_time_unix, phase, character_name "
                 "FROM pending_notifications "
                 "WHERE profile='UMA' AND notify_unix > ? "
@@ -94,9 +194,9 @@ async def sync_notifications_from_gacha():
                     "INSERT INTO pending_notifications "
                     "(event_id, category, title, timing_type, notify_unix, "
                     "event_time_unix, sent, phase, character_name) "
-                    "VALUES (NULL, ?, ?, ?, ?, ?, 0, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)",
                     [
-                        (r["category"], r["title"], r["timing_type"],
+                        (r["id"], r["category"], r["title"], r["timing_type"],
                          r["notify_unix"], r["event_time_unix"],
                          r["phase"], r["character_name"])
                         for r in gacha_rows
