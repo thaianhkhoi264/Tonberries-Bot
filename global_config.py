@@ -24,3 +24,6 @@ LOCAL_DB = "data/tonberries.db"
 CIRCLE_ID         = "532127760"          # uma.moe circle ID for Tonberries
 CIRCLES_DB        = "data/circles.db"   # written by circles_scraper.py
 CIRCLE_CHANNEL_ID = 1508622405357015190  # Channel where circle stats are posted
+
+# Skills scraper (GameTora)
+SKILLS_DB = "data/skills.db"  # written by skills_scraper.py
