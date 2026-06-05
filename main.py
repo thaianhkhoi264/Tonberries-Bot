@@ -2,12 +2,34 @@ import sys
 import asyncio
 
 import discord
+from discord import app_commands
 
 from bot import bot, token, logger
 from global_config import OWNER_USER_IDS
 import uma_module
 import notification_module
 import circles_module
+import skills_module
+
+
+# ---------------------------------------------------------------------------
+# Slash commands
+# ---------------------------------------------------------------------------
+
+@bot.tree.command(name="skill", description="Look up an Uma Musume skill")
+@app_commands.describe(name="Skill name to search for")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def _slash_skill(interaction: discord.Interaction, name: str):
+    await skills_module.handle_skill_interaction(interaction, name)
+
+
+@_slash_skill.autocomplete("name")
+async def _slash_skill_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await skills_module.autocomplete_skills(interaction, current)
 
 
 # ---------------------------------------------------------------------------
@@ -20,6 +42,8 @@ async def on_ready():
     await uma_module.init_local_db()
     await uma_module.start_background_tasks()
     await circles_module.start_background_task()
+    await bot.tree.sync()
+    logger.info("[Bot] Slash commands synced")
 
 
 @bot.event
@@ -32,20 +56,25 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    cmd = message.content.strip().lower()
+    cmd = message.content.strip()
+    cmd_lower = cmd.lower()
 
-    if cmd == "help":
+    if cmd_lower == "help":
         await _cmd_help(message)
-    elif cmd == "refresh":
+    elif cmd_lower == "refresh":
         await _cmd_refresh(message)
-    elif cmd == "pending":
+    elif cmd_lower == "pending":
         await _cmd_pending(message)
-    elif cmd == "restart":
+    elif cmd_lower == "restart":
         await _cmd_restart(message)
-    elif cmd == "shutdown":
+    elif cmd_lower == "shutdown":
         await _cmd_shutdown(message)
-    elif cmd == "circles":
+    elif cmd_lower == "circles":
         await _cmd_circles(message)
+    elif cmd_lower == "skill refresh":
+        await _cmd_skill_refresh(message)
+    elif cmd_lower.startswith("skill "):
+        await skills_module.handle_skill_lookup(message, cmd[len("skill "):])
     # Unknown commands are silently ignored
 
 
@@ -60,6 +89,8 @@ async def _cmd_help(message: discord.Message):
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
         "`circles` — Force-refresh the club circle stats\n"
+        "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
+        "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
         "`shutdown` — Stop Dia in case she spammed..."
     )
@@ -123,6 +154,28 @@ async def _cmd_circles(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Circles refresh failed: {exc}")
         await message.channel.send(f"Circle refresh failed: {exc}")
+
+
+async def _cmd_skill_refresh(message: discord.Message):
+    await message.channel.send("Running skills scraper (this takes several minutes)…")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "skills_scraper.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace")[-1500:]
+            logger.error(f"[Bot] Skills scraper failed: {err}")
+            await message.channel.send(
+                f"Skills scraper failed (exit {proc.returncode}):\n```\n{err}\n```"
+            )
+        else:
+            await message.channel.send("Skills database refreshed.")
+    except Exception as exc:
+        logger.error(f"[Bot] Skills scraper error: {exc}")
+        await message.channel.send(f"Skills scraper error: {exc}")
 
 
 async def _cmd_restart(message: discord.Message):
