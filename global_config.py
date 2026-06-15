@@ -1,3 +1,5 @@
+import os
+
 # Tonberries-Bot Configuration
 # Fill in OWNER_USER_ID, MAIN_SERVER_ID, and all channel IDs before first run.
 
@@ -20,10 +22,10 @@ SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 # Tonberries-Bot's own database (event message IDs + notification schedule)
 LOCAL_DB = "data/tonberries.db"
 
-# Circles scraper
+# Circles — uma.moe API
 CIRCLE_ID         = "532127760"          # uma.moe circle ID for Tonberries
-CIRCLES_DB        = "data/circles.db"   # written by circles_scraper.py
 CIRCLE_CHANNEL_ID = 1508622405357015190  # Channel where circle stats are posted
+UMA_MOE_API_KEY   = os.getenv("UMA_MOE_API_KEY", "")  # set in .env
 
 # Skills scraper (GameTora)
 SKILLS_DB = "data/skills.db"  # written by skills_scraper.py

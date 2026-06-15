@@ -2,13 +2,14 @@ import asyncio
 import calendar
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 import discord
 
+import uma_moe_api
 from bot import bot, logger
-from global_config import CIRCLE_CHANNEL_ID, CIRCLES_DB, LOCAL_DB
+from global_config import CIRCLE_CHANNEL_ID, LOCAL_DB
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -44,6 +45,9 @@ STATUS_COLORS = {
 
 MAX_EMBEDS_PER_MESSAGE = 10
 
+# uma.moe refreshes ~15:10 UTC daily; we pull 1 h later to be safe
+UPDATE_HOUR_UTC = 16
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -58,7 +62,7 @@ class MemberStatus:
 
 
 # ---------------------------------------------------------------------------
-# Database helpers  (stored in LOCAL_DB so IDs survive restarts)
+# Database helpers  (stored in LOCAL_DB so message IDs survive restarts)
 # ---------------------------------------------------------------------------
 
 async def init_db() -> None:
@@ -88,49 +92,24 @@ async def _set(conn, key: str, value: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Read data from circles.db
+# Member helpers
 # ---------------------------------------------------------------------------
 
-async def _read_data() -> dict | None:
-    try:
-        async with aiosqlite.connect(CIRCLES_DB) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM circle_club WHERE id=1") as cur:
-                club = await cur.fetchone()
-            if not club:
-                return None
-            club = dict(club)
+def _monthly_gain(daily_fans: list[int]) -> int:
+    """Sum of daily fan gains for the month.
 
-            async with db.execute(
-                "SELECT name, monthly_gain, seven_day_avg, is_inactive "
-                "FROM circle_members"
-            ) as cur:
-                members = [dict(r) for r in await cur.fetchall()]
+    uma.moe returns daily_fans as an array of per-day gain values.
+    If this assumption is wrong (e.g. cumulative values), adjust here.
+    """
+    return sum(daily_fans) if daily_fans else 0
 
-        return {
-            "scraped_at":  club["scraped_at"],
-            "rankTier":    club["rank_tier"],
-            "rankIconSrc": club["rank_icon_src"],
-            "rankNumber":  club["rank_number"],
-            "needed":      club["needed"],
-            "neededDelta": club["needed_delta"],
-            "members": [
-                {
-                    "name":        m["name"],
-                    "monthlyGain": m["monthly_gain"],
-                    "sevenDayAvg": m["seven_day_avg"],
-                    "isInactive":  bool(m["is_inactive"]),
-                }
-                for m in members
-            ],
-        }
-    except Exception as exc:
-        logger.warning(f"[Circles] Could not read circles.db: {exc}")
-        return None
+
+def _is_inactive(daily_fans: list[int]) -> bool:
+    return _monthly_gain(daily_fans) == 0
 
 
 # ---------------------------------------------------------------------------
-# Embed builders
+# Embed helpers
 # ---------------------------------------------------------------------------
 
 def _next_rank_emoji(tier: str) -> str:
@@ -141,16 +120,16 @@ def _next_rank_emoji(tier: str) -> str:
     return RANK_EMOJIS.get(next_tier, next_tier)
 
 
-def _parse_fans(s: str | None) -> int:
-    if not s:
-        return 0
-    try:
-        return int(s.replace(",", "").lstrip("+"))
-    except ValueError:
-        return 0
+def _next_update_ts() -> int:
+    """Unix timestamp of the next scheduled 16:00 UTC pull."""
+    now = datetime.now(timezone.utc)
+    today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=0, second=0, microsecond=0)
+    if now >= today_update:
+        return int((today_update + timedelta(days=1)).timestamp())
+    return int(today_update.timestamp())
 
 
-def _member_status(monthly_gain: str | None) -> MemberStatus:
+def _member_status(gained: int) -> MemberStatus:
     now            = datetime.now(timezone.utc)
     days_in_month  = calendar.monthrange(now.year, now.month)[1]
     days_elapsed   = now.day
@@ -158,7 +137,6 @@ def _member_status(monthly_gain: str | None) -> MemberStatus:
 
     monthly_target = DAILY_REQUIREMENT * days_in_month
     expected_today = DAILY_REQUIREMENT * days_elapsed
-    gained         = _parse_fans(monthly_gain)
 
     if gained >= monthly_target:
         over = gained - monthly_target
@@ -178,8 +156,8 @@ def _member_status(monthly_gain: str | None) -> MemberStatus:
             line=f"On track — {remaining:,} more fans to finish the month",
         )
 
-    remaining    = monthly_target - gained
-    catchup      = expected_today - gained
+    remaining = monthly_target - gained
+    catchup   = expected_today - gained
 
     if days_remaining > 0:
         daily_needed = math.ceil(remaining / days_remaining)
@@ -207,46 +185,69 @@ def _member_status(monthly_gain: str | None) -> MemberStatus:
     )
 
 
-def _build_club_embed(data: dict) -> discord.Embed:
-    tier         = data["rankTier"]
-    needed       = data.get("needed", "N/A")
-    needed_delta = data.get("neededDelta") or ""
-    members      = data.get("members", [])
-    scraped_at   = data.get("scraped_at", 0)
-    rank_icon    = data.get("rankIconSrc") or ""
+# ---------------------------------------------------------------------------
+# Embed builders
+# ---------------------------------------------------------------------------
 
-    emoji      = RANK_EMOJIS.get(tier, tier)
+def _build_club_embed(api_data: dict) -> discord.Embed:
+    circle  = api_data.get("circle", {})
+    members = api_data.get("members", [])
+
+    tier_idx = min(max(int(api_data.get("club_rank", 0)), 0), len(RANK_ORDER) - 1)
+    tier     = RANK_ORDER[tier_idx]
+    emoji    = RANK_EMOJIS.get(tier, tier)
     next_emoji = _next_rank_emoji(tier)
 
-    needed_int   = int(needed.replace(",", "")) if needed != "N/A" else 0
-    active_count = len([m for m in members if not m.get("isInactive")])
-    per_member   = f"{needed_int // active_count:,}" if active_count else "N/A"
+    fans_to_next          = int(api_data.get("fans_to_next_tier", 0))
+    yesterday_fans_to_next = int(api_data.get("yesterday_fans_to_next_tier", fans_to_next))
+    gained_today          = yesterday_fans_to_next - fans_to_next  # positive = gained fans
+
+    monthly_rank  = int(circle.get("monthly_rank", 0))
+    active_count  = sum(1 for m in members if not _is_inactive(m.get("daily_fans") or []))
+    per_member    = f"{fans_to_next // active_count:,}" if active_count else "N/A"
+
+    next_ts = _next_update_ts()
+
+    raw_ts = circle.get("last_updated", "")
+    try:
+        last_updated = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        last_updated = datetime.now(timezone.utc)
 
     embed = discord.Embed(title="Club Monthly Fan Count", colour=discord.Colour.gold())
-    embed.add_field(name="Rank", value=f"{emoji} {tier}", inline=True)
     embed.add_field(
-        name=f"Until {next_emoji}" if next_emoji else "Until next rank",
-        value=f"{needed} · {per_member}/member",
+        name="Rank",
+        value=f"{emoji} {tier} · #{monthly_rank:,}",
         inline=True,
     )
-    if needed_delta:
-        embed.add_field(name="Gained since yesterday", value=needed_delta, inline=True)
-
-    if rank_icon:
-        icon_url = rank_icon if rank_icon.startswith("http") else f"https://uma.moe{rank_icon}"
-        embed.set_thumbnail(url=icon_url)
-
-    embed.timestamp = datetime.fromtimestamp(scraped_at, tz=timezone.utc)
+    embed.add_field(
+        name=f"Until {next_emoji}" if next_emoji else "Until next rank",
+        value=f"{fans_to_next:,} · {per_member}/member",
+        inline=True,
+    )
+    if gained_today != 0:
+        sign = "+" if gained_today > 0 else ""
+        embed.add_field(
+            name="Gained since yesterday",
+            value=f"{sign}{gained_today:,}",
+            inline=True,
+        )
+    embed.add_field(
+        name="Next refresh",
+        value=f"<t:{next_ts}:F>\n<t:{next_ts}:R>",
+        inline=False,
+    )
+    embed.timestamp = last_updated
     embed.set_footer(text="Last updated")
 
     return embed
 
 
 def _build_member_embed(member: dict, rank: int) -> discord.Embed:
-    name    = member["name"]
-    monthly = member.get("monthlyGain") or "0"
-    gained  = _parse_fans(monthly)
-    status  = _member_status(monthly)
+    name       = member.get("trainer_name", "Unknown")
+    daily_fans = member.get("daily_fans") or []
+    gained     = _monthly_gain(daily_fans)
+    status     = _member_status(gained)
 
     embed = discord.Embed(
         title=f"#{rank} {status.emoji} {name}",
@@ -257,9 +258,8 @@ def _build_member_embed(member: dict, rank: int) -> discord.Embed:
 
 
 def _build_member_embeds(members: list[dict]) -> list[discord.Embed]:
-    active = [m for m in members if not m.get("isInactive")]
-    # Rank by monthly fans descending so position reflects current standing
-    active.sort(key=lambda m: _parse_fans(m.get("monthlyGain")), reverse=True)
+    active = [m for m in members if not _is_inactive(m.get("daily_fans") or [])]
+    active.sort(key=lambda m: _monthly_gain(m.get("daily_fans") or []), reverse=True)
     return [_build_member_embed(m, i + 1) for i, m in enumerate(active)]
 
 
@@ -273,7 +273,6 @@ async def _send_or_edit_embed(
     key: str,
     embed: discord.Embed,
 ) -> str:
-    """Edit the saved single-embed message if it still exists, else post new."""
     msg_id = await _get(conn, key)
     if msg_id:
         try:
@@ -292,7 +291,6 @@ async def _send_or_edit_embeds(
     key: str,
     embeds: list[discord.Embed],
 ) -> str:
-    """Edit the saved multi-embed message if it still exists, else post new."""
     msg_id = await _get(conn, key)
     if msg_id:
         try:
@@ -314,32 +312,30 @@ async def post_or_edit(force: bool = False) -> None:
         logger.error("[Circles] Channel not found — check CIRCLE_CHANNEL_ID in global_config.py")
         return
 
-    data = await _read_data()
-    if not data:
-        logger.warning("[Circles] No data available in circles.db yet — skipping")
+    try:
+        api_data = await uma_moe_api.fetch_circle()
+    except Exception as exc:
+        logger.error(f"[Circles] API fetch failed: {exc}")
         return
 
-    scraped_at = str(data["scraped_at"])
+    last_updated = api_data.get("circle", {}).get("last_updated", "")
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
-        if not force and await _get(conn, "last_scraped_at") == scraped_at:
+        if not force and await _get(conn, "last_circle_updated") == last_updated:
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return
 
-        # Header embed (single message)
         header_id = await _send_or_edit_embed(
-            channel, conn, "circle_header_msg", _build_club_embed(data)
+            channel, conn, "circle_header_msg", _build_club_embed(api_data)
         )
         await _set(conn, "circle_header_msg", header_id)
 
-        # Member embeds batched into groups of MAX_EMBEDS_PER_MESSAGE
-        all_embeds = _build_member_embeds(data["members"])
+        all_embeds = _build_member_embeds(api_data.get("members", []))
         batches = [
             all_embeds[i : i + MAX_EMBEDS_PER_MESSAGE]
             for i in range(0, len(all_embeds), MAX_EMBEDS_PER_MESSAGE)
         ] if all_embeds else []
 
-        # Collect previously-stored batch message IDs
         old_ids: list[str] = []
         for i in range(20):
             mid = await _get(conn, f"circle_members_msg_{i}")
@@ -355,25 +351,25 @@ async def post_or_edit(force: bool = False) -> None:
             new_ids.append(mid)
             await _set(conn, f"circle_members_msg_{i}", mid)
 
-        # Delete surplus messages if batch count shrank
         for mid in old_ids[len(batches):]:
             try:
                 await channel.get_partial_message(int(mid)).delete()
             except discord.NotFound:
                 pass
 
-        # Remove DB keys for deleted batches
         for i in range(len(new_ids), len(old_ids)):
             await conn.execute(
                 "DELETE FROM circle_messages WHERE key=?",
                 (f"circle_members_msg_{i}",),
             )
 
-        await _set(conn, "last_scraped_at", scraped_at)
+        await _set(conn, "last_circle_updated", last_updated)
         await conn.commit()
 
+    tier_idx = min(max(int(api_data.get("club_rank", 0)), 0), len(RANK_ORDER) - 1)
     logger.info(
-        f"[Circles] Updated — rank {data['rankTier']}, "
+        f"[Circles] Updated — tier {RANK_ORDER[tier_idx]}, "
+        f"rank #{api_data.get('circle', {}).get('monthly_rank', '?')}, "
         f"{len(all_embeds)} member embed(s) in {len(batches)} message(s)"
     )
 
@@ -384,7 +380,17 @@ async def post_or_edit(force: bool = False) -> None:
 
 async def _circle_update_loop() -> None:
     while True:
-        await asyncio.sleep(1800)  # check every 30 min
+        now          = datetime.now(timezone.utc)
+        today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=0, second=0, microsecond=0)
+        next_run     = today_update if now < today_update else today_update + timedelta(days=1)
+
+        wait_secs = (next_run - now).total_seconds()
+        logger.info(
+            f"[Circles] Next scheduled pull in {wait_secs / 3600:.1f}h "
+            f"at {next_run.strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+        await asyncio.sleep(wait_secs)
+
         try:
             await post_or_edit()
         except Exception as exc:
