@@ -24,7 +24,8 @@ RANK_EMOJIS = {
     "S+": "<:rank_S_plus:1508640948152963183>",
 }
 
-RANK_ORDER = ["D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS"]
+# 1-indexed to match API's club_rank field (1=D, 2=D+, ... 11=SS)
+RANK_ORDER = ["", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS"]
 
 DAILY_REQUIREMENT = 1_000_000
 STARE_THRESHOLD   = 3_000_000
@@ -202,14 +203,16 @@ def _build_club_embed(api_data: dict) -> discord.Embed:
     circle  = api_data.get("circle", {})
     members = api_data.get("members", [])
 
-    tier_idx = min(max(int(api_data.get("club_rank", 0)), 0), len(RANK_ORDER) - 1)
-    tier     = RANK_ORDER[tier_idx]
+    tier     = RANK_ORDER[min(max(int(api_data.get("club_rank", 1)), 1), len(RANK_ORDER) - 1)]
     emoji    = RANK_EMOJIS.get(tier, tier)
     next_emoji = _next_rank_emoji(tier)
 
-    fans_to_next          = int(api_data.get("fans_to_next_tier", 0))
-    yesterday_fans_to_next = int(api_data.get("yesterday_fans_to_next_tier", fans_to_next))
-    gained_today          = yesterday_fans_to_next - fans_to_next  # positive = gained fans
+    fans_to_next  = int(api_data.get("fans_to_next_tier", 0))
+
+    # Circle-level fans gained since yesterday (always positive unless data anomaly)
+    monthly_point   = int(circle.get("monthly_point", 0))
+    yesterday_point = int(circle.get("yesterday_points", monthly_point))
+    gained_today    = monthly_point - yesterday_point
 
     monthly_rank  = int(circle.get("monthly_rank", 0))
     active_count  = sum(1 for m in members if not _is_inactive(m.get("daily_fans") or []))
@@ -234,11 +237,10 @@ def _build_club_embed(api_data: dict) -> discord.Embed:
         value=f"{fans_to_next:,} · {per_member}/member",
         inline=True,
     )
-    if gained_today != 0:
-        sign = "+" if gained_today > 0 else ""
+    if gained_today > 0:
         embed.add_field(
             name="Gained since yesterday",
-            value=f"{sign}{gained_today:,}",
+            value=f"+{gained_today:,}",
             inline=True,
         )
     embed.add_field(
@@ -375,9 +377,9 @@ async def post_or_edit(force: bool = False) -> None:
         await _set(conn, "last_circle_updated", last_updated)
         await conn.commit()
 
-    tier_idx = min(max(int(api_data.get("club_rank", 0)), 0), len(RANK_ORDER) - 1)
+    tier = RANK_ORDER[min(max(int(api_data.get("club_rank", 1)), 1), len(RANK_ORDER) - 1)]
     logger.info(
-        f"[Circles] Updated — tier {RANK_ORDER[tier_idx]}, "
+        f"[Circles] Updated — tier {tier}, "
         f"rank #{api_data.get('circle', {}).get('monthly_rank', '?')}, "
         f"{len(all_embeds)} member embed(s) in {len(batches)} message(s)"
     )
