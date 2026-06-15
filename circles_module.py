@@ -96,12 +96,21 @@ async def _set(conn, key: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _monthly_gain(daily_fans: list[int]) -> int:
-    """Sum of daily fan gains for the month.
+    """Calculate fans gained this month from the daily_fans array.
 
-    uma.moe returns daily_fans as an array of per-day gain values.
-    If this assumption is wrong (e.g. cumulative values), adjust here.
+    uma.moe stores cumulative lifetime fan counts per day.
+    The first non-zero entry may be negative: this is the previous month's
+    ending total stored negated as a baseline marker.  Monthly gain =
+    last positive value - abs(first non-zero).
     """
-    return sum(daily_fans) if daily_fans else 0
+    non_zero = [f for f in daily_fans if f != 0]
+    if not non_zero:
+        return 0
+    baseline = abs(non_zero[0])
+    positives = [f for f in non_zero if f > 0]
+    if not positives:
+        return 0
+    return positives[-1] - baseline
 
 
 def _is_inactive(daily_fans: list[int]) -> bool:
