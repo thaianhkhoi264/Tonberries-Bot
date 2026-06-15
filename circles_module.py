@@ -1,6 +1,7 @@
 import asyncio
 import calendar
 import math
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import aiosqlite
@@ -33,6 +34,27 @@ STATUS_EMOJIS = {
     "behind":     "<a:diashake:1508662342060081253>",
     "far_behind": "<a:diastare:1508665580071161967>",
 }
+
+STATUS_COLORS = {
+    "goal_met":   discord.Colour.dark_green(),
+    "on_track":   discord.Colour.green(),
+    "behind":     discord.Colour.red(),
+    "far_behind": discord.Colour(0x1a1a1a),
+}
+
+MAX_EMBEDS_PER_MESSAGE = 10
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MemberStatus:
+    category: str
+    emoji:    str
+    color:    discord.Colour
+    line:     str  # one-line status description for the embed
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +110,7 @@ async def _read_data() -> dict | None:
         return {
             "scraped_at":  club["scraped_at"],
             "rankTier":    club["rank_tier"],
+            "rankIconSrc": club["rank_icon_src"],
             "rankNumber":  club["rank_number"],
             "needed":      club["needed"],
             "neededDelta": club["needed_delta"],
@@ -107,7 +130,7 @@ async def _read_data() -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Message builders
+# Embed builders
 # ---------------------------------------------------------------------------
 
 def _next_rank_emoji(tier: str) -> str:
@@ -127,7 +150,7 @@ def _parse_fans(s: str | None) -> int:
         return 0
 
 
-def _member_status(monthly_gain: str | None) -> tuple[str, str]:
+def _member_status(monthly_gain: str | None) -> MemberStatus:
     now            = datetime.now(timezone.utc)
     days_in_month  = calendar.monthrange(now.year, now.month)[1]
     days_elapsed   = now.day
@@ -139,102 +162,146 @@ def _member_status(monthly_gain: str | None) -> tuple[str, str]:
 
     if gained >= monthly_target:
         over = gained - monthly_target
-        return (
-            f"Monthly goal reached — {over:,} ahead of target",
-            STATUS_EMOJIS["goal_met"],
+        return MemberStatus(
+            category="goal_met",
+            emoji=STATUS_EMOJIS["goal_met"],
+            color=STATUS_COLORS["goal_met"],
+            line=f"Monthly goal reached — {over:,} ahead of target",
         )
 
     if gained >= expected_today:
         remaining = monthly_target - gained
-        return (
-            f"On track — {remaining:,} more fans to complete the month",
-            STATUS_EMOJIS["on_track"],
+        return MemberStatus(
+            category="on_track",
+            emoji=STATUS_EMOJIS["on_track"],
+            color=STATUS_COLORS["on_track"],
+            line=f"On track — {remaining:,} more fans to finish the month",
         )
 
-    remaining = monthly_target - gained
+    remaining    = monthly_target - gained
+    catchup      = expected_today - gained
+
     if days_remaining > 0:
         daily_needed = math.ceil(remaining / days_remaining)
+        details      = f"+{catchup:,} to get on pace · ~{daily_needed:,}/day for {days_remaining} days"
+
         if daily_needed >= STARE_THRESHOLD:
-            return (
-                f"Very behind — needs ~{daily_needed:,}/day for the remaining {days_remaining} days",
-                STATUS_EMOJIS["far_behind"],
+            return MemberStatus(
+                category="far_behind",
+                emoji=STATUS_EMOJIS["far_behind"],
+                color=STATUS_COLORS["far_behind"],
+                line=f"Very behind — {details}",
             )
-        return (
-            f"Behind — needs ~{daily_needed:,}/day for the remaining {days_remaining} days to hit the goal",
-            STATUS_EMOJIS["behind"],
+        return MemberStatus(
+            category="behind",
+            emoji=STATUS_EMOJIS["behind"],
+            color=STATUS_COLORS["behind"],
+            line=f"Behind — {details}",
         )
 
-    return (
-        f"Month ended — {remaining:,} short of the monthly goal",
-        STATUS_EMOJIS["far_behind"],
+    return MemberStatus(
+        category="far_behind",
+        emoji=STATUS_EMOJIS["far_behind"],
+        color=STATUS_COLORS["far_behind"],
+        line=f"Month ended — {remaining:,} short of the monthly goal",
     )
 
 
-def _build_club_message(data: dict) -> str:
+def _build_club_embed(data: dict) -> discord.Embed:
     tier         = data["rankTier"]
     needed       = data.get("needed", "N/A")
     needed_delta = data.get("neededDelta") or ""
     members      = data.get("members", [])
-    emoji        = RANK_EMOJIS.get(tier, tier)
     scraped_at   = data.get("scraped_at", 0)
+    rank_icon    = data.get("rankIconSrc") or ""
 
-    needed_int = int(needed.replace(",", "")) if needed != "N/A" else 0
-    count      = len(members)
-    per_member = f"{needed_int // count:,}" if count else "N/A"
+    emoji      = RANK_EMOJIS.get(tier, tier)
+    next_emoji = _next_rank_emoji(tier)
 
-    delta_line = f"\nFans gained since yesterday: {needed_delta}" if needed_delta else ""
+    needed_int   = int(needed.replace(",", "")) if needed != "N/A" else 0
+    active_count = len([m for m in members if not m.get("isInactive")])
+    per_member   = f"{needed_int // active_count:,}" if active_count else "N/A"
 
-    return (
-        f"# Club Monthly Fan Count\n"
-        f"## Rank {emoji}\n"
-        f"## Needed until rank {_next_rank_emoji(tier)}: {needed} / {per_member} per member"
-        f"{delta_line}\n"
-        f"-# Last updated <t:{scraped_at}:F> · <t:{scraped_at}:R>"
+    embed = discord.Embed(title="Club Monthly Fan Count", colour=discord.Colour.gold())
+    embed.add_field(name="Rank", value=f"{emoji} {tier}", inline=True)
+    embed.add_field(
+        name=f"Until {next_emoji}" if next_emoji else "Until next rank",
+        value=f"{needed} · {per_member}/member",
+        inline=True,
     )
+    if needed_delta:
+        embed.add_field(name="Gained since yesterday", value=needed_delta, inline=True)
+
+    if rank_icon:
+        icon_url = rank_icon if rank_icon.startswith("http") else f"https://uma.moe{rank_icon}"
+        embed.set_thumbnail(url=icon_url)
+
+    embed.timestamp = datetime.fromtimestamp(scraped_at, tz=timezone.utc)
+    embed.set_footer(text="Last updated")
+
+    return embed
 
 
-def _build_member_messages(members: list[dict]) -> list[str]:
-    active  = [m for m in members if not m.get("isInactive")]
-    chunks  = []
-    current = "## Members\n"
+def _build_member_embed(member: dict, rank: int) -> discord.Embed:
+    name    = member["name"]
+    monthly = member.get("monthlyGain") or "0"
+    gained  = _parse_fans(monthly)
+    status  = _member_status(monthly)
 
-    for i, m in enumerate(active, 1):
-        monthly            = m["monthlyGain"] or "N/A"
-        status_text, emoji = _member_status(m.get("monthlyGain"))
-        entry = f"{i}. **{m['name']}** — {monthly} {emoji}\n-# {status_text}\n"
+    embed = discord.Embed(
+        title=f"#{rank} {status.emoji} {name}",
+        description=f"**{gained:,}** fans this month\n{status.line}",
+        colour=status.color,
+    )
+    return embed
 
-        if len(current) + len(entry) > 1900:
-            chunks.append(current.rstrip())
-            current = entry
-        else:
-            current += entry
 
-    if current.strip():
-        chunks.append(current.rstrip())
-
-    return chunks
+def _build_member_embeds(members: list[dict]) -> list[discord.Embed]:
+    active = [m for m in members if not m.get("isInactive")]
+    # Rank by monthly fans descending so position reflects current standing
+    active.sort(key=lambda m: _parse_fans(m.get("monthlyGain")), reverse=True)
+    return [_build_member_embed(m, i + 1) for i, m in enumerate(active)]
 
 
 # ---------------------------------------------------------------------------
 # Post / edit logic
 # ---------------------------------------------------------------------------
 
-async def _send_or_edit(
+async def _send_or_edit_embed(
     channel: discord.TextChannel,
     conn,
     key: str,
-    content: str,
+    embed: discord.Embed,
 ) -> str:
-    """Edit the saved message if it exists, otherwise post a new one. Returns message ID."""
+    """Edit the saved single-embed message if it still exists, else post new."""
     msg_id = await _get(conn, key)
     if msg_id:
         try:
             msg = await channel.fetch_message(int(msg_id))
-            await msg.edit(content=content)
+            await msg.edit(content=None, embed=embed)
             return msg_id
         except (discord.NotFound, discord.HTTPException):
-            pass  # fall through to re-post
-    msg = await channel.send(content)
+            pass
+    msg = await channel.send(embed=embed)
+    return str(msg.id)
+
+
+async def _send_or_edit_embeds(
+    channel: discord.TextChannel,
+    conn,
+    key: str,
+    embeds: list[discord.Embed],
+) -> str:
+    """Edit the saved multi-embed message if it still exists, else post new."""
+    msg_id = await _get(conn, key)
+    if msg_id:
+        try:
+            msg = await channel.fetch_message(int(msg_id))
+            await msg.edit(content=None, embeds=embeds)
+            return msg_id
+        except (discord.NotFound, discord.HTTPException):
+            pass
+    msg = await channel.send(embeds=embeds)
     return str(msg.id)
 
 
@@ -259,15 +326,20 @@ async def post_or_edit(force: bool = False) -> None:
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return
 
-        # Header message
-        header_id = await _send_or_edit(
-            channel, conn, "circle_header_msg", _build_club_message(data)
+        # Header embed (single message)
+        header_id = await _send_or_edit_embed(
+            channel, conn, "circle_header_msg", _build_club_embed(data)
         )
         await _set(conn, "circle_header_msg", header_id)
 
-        # Member messages (variable number of chunks)
-        new_texts = _build_member_messages(data["members"])
+        # Member embeds batched into groups of MAX_EMBEDS_PER_MESSAGE
+        all_embeds = _build_member_embeds(data["members"])
+        batches = [
+            all_embeds[i : i + MAX_EMBEDS_PER_MESSAGE]
+            for i in range(0, len(all_embeds), MAX_EMBEDS_PER_MESSAGE)
+        ] if all_embeds else []
 
+        # Collect previously-stored batch message IDs
         old_ids: list[str] = []
         for i in range(20):
             mid = await _get(conn, f"circle_members_msg_{i}")
@@ -276,24 +348,21 @@ async def post_or_edit(force: bool = False) -> None:
             old_ids.append(mid)
 
         new_ids: list[str] = []
-        for i, text in enumerate(new_texts):
-            mid = await _send_or_edit(
-                channel, conn,
-                f"circle_members_msg_{i}",
-                text,
+        for i, batch in enumerate(batches):
+            mid = await _send_or_edit_embeds(
+                channel, conn, f"circle_members_msg_{i}", batch
             )
             new_ids.append(mid)
+            await _set(conn, f"circle_members_msg_{i}", mid)
 
-        # Delete surplus messages if chunk count shrank
-        for mid in old_ids[len(new_texts):]:
+        # Delete surplus messages if batch count shrank
+        for mid in old_ids[len(batches):]:
             try:
                 await channel.get_partial_message(int(mid)).delete()
             except discord.NotFound:
                 pass
 
-        # Persist new IDs, remove keys for deleted chunks
-        for i, mid in enumerate(new_ids):
-            await _set(conn, f"circle_members_msg_{i}", mid)
+        # Remove DB keys for deleted batches
         for i in range(len(new_ids), len(old_ids)):
             await conn.execute(
                 "DELETE FROM circle_messages WHERE key=?",
@@ -305,7 +374,7 @@ async def post_or_edit(force: bool = False) -> None:
 
     logger.info(
         f"[Circles] Updated — rank {data['rankTier']}, "
-        f"{len(new_texts)} member message(s)"
+        f"{len(all_embeds)} member embed(s) in {len(batches)} message(s)"
     )
 
 
