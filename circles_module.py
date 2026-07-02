@@ -145,9 +145,8 @@ def _member_status(gained: int) -> MemberStatus:
     days_elapsed   = now.day
     days_remaining = days_in_month - days_elapsed
 
-    daily_req      = MONTHLY_REQUIREMENT / days_in_month
     monthly_target = MONTHLY_REQUIREMENT
-    expected_today = daily_req * days_elapsed
+    expected_today = MONTHLY_REQUIREMENT * days_elapsed // days_in_month
 
     if gained >= monthly_target:
         over = gained - monthly_target
