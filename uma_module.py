@@ -415,7 +415,7 @@ async def start_background_tasks():
     Runs the initial timer refresh, syncs notifications, then launches
     background loops.
     """
-    await uma_update_timers()
+    await uma_update_timers(force_update=True)
     await notification_module.sync_notifications_from_gacha()
     asyncio.create_task(scraper_file_watcher())
     asyncio.create_task(notification_module.notification_loop())

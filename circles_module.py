@@ -410,6 +410,6 @@ async def _circle_update_loop() -> None:
 
 async def start_background_task() -> None:
     await init_db()
-    await post_or_edit()
+    await post_or_edit(force=True)
     asyncio.create_task(_circle_update_loop())
     logger.info("[Circles] Background task started")
