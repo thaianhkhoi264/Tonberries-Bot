@@ -162,10 +162,20 @@ async def _cmd_skill_refresh(message: discord.Message):
 
 
 async def _cmd_restart(message: discord.Message):
-    await message.channel.send("Restarting…")
-    logger.info("[Bot] Restart requested by owner")
-    await bot.close()
-    sys.exit(1)  # Non-zero exit triggers systemd Restart=on-failure
+    import subprocess
+    await message.channel.send("Pulling latest changes…")
+    try:
+        result = subprocess.run(
+            ["git", "-C", "/home/piberry/Tonberries-Bot", "pull"],
+            capture_output=True, text=True
+        )
+        out = (result.stdout + result.stderr).strip()
+        await message.channel.send(f"```\n{out}\n```\nRestarting…")
+        logger.info(f"[Bot] git pull: {out}")
+    except Exception as exc:
+        await message.channel.send(f"git pull failed: {exc}\nRestarting anyway…")
+        logger.error(f"[Bot] git pull error: {exc}")
+    subprocess.Popen(["sudo", "systemctl", "restart", "tonberries-bot"])
 
 
 # ---------------------------------------------------------------------------
