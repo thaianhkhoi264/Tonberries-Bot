@@ -27,8 +27,8 @@ RANK_EMOJIS = {
 # 1-indexed to match API's club_rank field (1=D, 2=D+, ... 11=SS)
 RANK_ORDER = ["", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS"]
 
-DAILY_REQUIREMENT = 1_000_000
-STARE_THRESHOLD   = 3_000_000
+MONTHLY_REQUIREMENT = 20_000_000
+STARE_THRESHOLD     = 3_000_000
 
 STATUS_EMOJIS = {
     "goal_met":   "<a:diapat:1508665594013286400>",
@@ -145,8 +145,9 @@ def _member_status(gained: int) -> MemberStatus:
     days_elapsed   = now.day
     days_remaining = days_in_month - days_elapsed
 
-    monthly_target = DAILY_REQUIREMENT * days_in_month
-    expected_today = DAILY_REQUIREMENT * days_elapsed
+    daily_req      = MONTHLY_REQUIREMENT / days_in_month
+    monthly_target = MONTHLY_REQUIREMENT
+    expected_today = daily_req * days_elapsed
 
     if gained >= monthly_target:
         over = gained - monthly_target
