@@ -434,8 +434,17 @@ async def _send_or_edit_embeds(
     return str(msg.id)
 
 
-async def send_daily_report(user_ids: list[int], *, api_data: dict | None = None) -> None:
-    """DM the daily fan-gain report to each user in *user_ids*."""
+async def send_daily_report(
+    user_ids: list[int],
+    *,
+    api_data: dict | None = None,
+    snapshots: dict | None = None,
+) -> None:
+    """DM the daily fan-gain report to each user in *user_ids*.
+
+    Pass *snapshots* to use pre-loaded snapshot data (e.g. captured before the
+    current pull overwrites them).  If omitted, snapshots are loaded from DB.
+    """
     if api_data is None:
         try:
             api_data = await uma_moe_api.fetch_circle()
@@ -446,8 +455,9 @@ async def send_daily_report(user_ids: list[int], *, api_data: dict | None = None
     circle_ts = api_data.get("circle", {}).get("last_updated", "")
     members = [m for m in api_data.get("members", []) if m.get("last_updated") == circle_ts]
 
-    async with aiosqlite.connect(LOCAL_DB) as conn:
-        snapshots = await _load_snapshots(conn)
+    if snapshots is None:
+        async with aiosqlite.connect(LOCAL_DB) as conn:
+            snapshots = await _load_snapshots(conn)
 
     embed = _build_report_embed(members, snapshots)
 
@@ -555,8 +565,10 @@ async def _circle_update_loop() -> None:
         await asyncio.sleep(wait_secs)
 
         try:
+            async with aiosqlite.connect(LOCAL_DB) as conn:
+                old_snapshots = await _load_snapshots(conn)
             await post_or_edit()
-            await send_daily_report(list(OWNER_USER_IDS))
+            await send_daily_report(list(OWNER_USER_IDS), snapshots=old_snapshots)
         except Exception as exc:
             logger.error(f"[Circles] Loop error: {exc}")
 
