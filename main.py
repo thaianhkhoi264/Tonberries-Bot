@@ -44,6 +44,24 @@ async def on_ready():
     await circles_module.start_background_task()
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")
+    await _send_restart_dm()
+
+
+async def _send_restart_dm() -> None:
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%h — %s (%cr)"],
+            capture_output=True, text=True,
+        )
+        commit = result.stdout.strip() or "unknown"
+    except Exception:
+        commit = "unavailable"
+    try:
+        user = await bot.fetch_user(680653908259110914)
+        await user.send(f"Bot restarted.\nLatest commit: `{commit}`")
+    except Exception as exc:
+        logger.error(f"[Bot] Failed to send restart DM: {exc}")
 
 
 @bot.event
@@ -71,6 +89,8 @@ async def on_message(message: discord.Message):
         await _cmd_shutdown(message)
     elif cmd_lower == "circles":
         await _cmd_circles(message)
+    elif cmd_lower == "report":
+        await _cmd_report(message)
     elif cmd_lower == "skill refresh":
         await _cmd_skill_refresh(message)
     elif cmd_lower.startswith("skill "):
@@ -89,6 +109,7 @@ async def _cmd_help(message: discord.Message):
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
         "`circles` — Force-refresh the club circle stats\n"
+        "`report` — Force-send the daily fan report to you\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -127,6 +148,16 @@ async def _cmd_shutdown(message: discord.Message):
     logger.info("[Bot] Shutdown requested by owner")
     await bot.close()
     sys.exit(0)  # Exit code 0 — systemd Restart=on-failure will NOT restart
+
+
+async def _cmd_report(message: discord.Message):
+    await message.channel.send("Building fan report…")
+    try:
+        await circles_module.send_daily_report([message.author.id])
+        await message.channel.send("Report sent.")
+    except Exception as exc:
+        logger.error(f"[Bot] Report failed: {exc}")
+        await message.channel.send(f"Report failed: {exc}")
 
 
 async def _cmd_circles(message: discord.Message):

@@ -9,7 +9,7 @@ import discord
 
 import uma_moe_api
 from bot import bot, logger
-from global_config import CIRCLE_CHANNEL_ID, LOCAL_DB
+from global_config import CIRCLE_CHANNEL_ID, LOCAL_DB, OWNER_USER_IDS
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -74,6 +74,14 @@ async def init_db() -> None:
                 value TEXT NOT NULL
             )
         """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS circle_member_snapshots (
+                viewer_id    INTEGER PRIMARY KEY,
+                trainer_name TEXT,
+                monthly_fans INTEGER NOT NULL,
+                saved_at     TEXT NOT NULL
+            )
+        """)
         await conn.commit()
 
 
@@ -90,6 +98,30 @@ async def _set(conn, key: str, value: str) -> None:
         "INSERT OR REPLACE INTO circle_messages (key, value) VALUES (?, ?)",
         (key, value),
     )
+
+
+async def _save_snapshots(conn, members: list[dict]) -> None:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for m in members:
+        vid = m.get("viewer_id")
+        if vid is None:
+            continue
+        await conn.execute(
+            """INSERT OR REPLACE INTO circle_member_snapshots
+               (viewer_id, trainer_name, monthly_fans, saved_at)
+               VALUES (?, ?, ?, ?)""",
+            (int(vid), m.get("trainer_name", ""), _monthly_gain(m.get("daily_fans") or []), now_iso),
+        )
+
+
+async def _load_snapshots(conn) -> dict:
+    snapshots: dict = {}
+    async with conn.execute(
+        "SELECT viewer_id, trainer_name, monthly_fans FROM circle_member_snapshots"
+    ) as cur:
+        async for row in cur:
+            snapshots[row[0]] = {"trainer_name": row[1], "monthly_fans": row[2]}
+    return snapshots
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +306,94 @@ def _build_member_embeds(members: list[dict]) -> list[discord.Embed]:
     return [_build_member_embed(m, i + 1) for i, m in enumerate(active)]
 
 
+def _add_group_field(embed: discord.Embed, title: str, lines: list[str]) -> None:
+    """Add lines as one or more fields, splitting at the 1024-char limit."""
+    chunks: list[str] = []
+    chunk: list[str] = []
+    chunk_len = 0
+    for line in lines:
+        if chunk_len + len(line) + 1 > 1024 and chunk:
+            chunks.append("\n".join(chunk))
+            chunk = []
+            chunk_len = 0
+        chunk.append(line)
+        chunk_len += len(line) + 1
+    if chunk:
+        chunks.append("\n".join(chunk))
+    for i, c in enumerate(chunks):
+        embed.add_field(name=title if i == 0 else "\u200b", value=c, inline=False)
+
+
+def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
+    embed = discord.Embed(
+        title="Daily Fan Report",
+        colour=discord.Colour.blurple(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_footer(text="Generated")
+
+    now           = datetime.now(timezone.utc)
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    daily_quota   = MONTHLY_REQUIREMENT // days_in_month
+
+    goal_met: list[tuple] = []
+    behind:   list[tuple] = []
+    no_gain:  list[tuple] = []
+
+    for m in members:
+        vid     = m.get("viewer_id")
+        name    = m.get("trainer_name", "Unknown")
+        current = _monthly_gain(m.get("daily_fans") or [])
+        snap    = snapshots.get(int(vid)) if vid is not None else None
+        daily   = current - snap["monthly_fans"] if snap else None
+
+        if daily is not None and daily >= daily_quota:
+            goal_met.append((name, daily))
+        elif daily is not None and daily > 0:
+            behind.append((name, daily))
+        else:
+            no_gain.append((name, current))
+
+    goal_met.sort(key=lambda r: r[1], reverse=True)
+    behind.sort(  key=lambda r: r[1], reverse=True)
+    no_gain.sort( key=lambda r: r[1], reverse=True)
+
+    if not goal_met and not behind and not no_gain:
+        embed.description = "No members."
+        return embed
+
+    # Color driven by whichever group has the most members; ties favour the worse status
+    dominant_color = max(
+        [
+            (len(no_gain),  STATUS_COLORS["far_behind"]),
+            (len(behind),   STATUS_COLORS["behind"]),
+            (len(goal_met), STATUS_COLORS["goal_met"]),
+        ],
+        key=lambda x: x[0],
+    )[1]
+    embed.colour = dominant_color
+
+    SEP = "\u2500" * 28
+
+    if goal_met:
+        lines = [f"**{name}** — +{daily:,}" for name, daily in goal_met]
+        if behind or no_gain:
+            lines.append(SEP)
+        _add_group_field(embed, f"Goal Reached! {STATUS_EMOJIS['goal_met']}", lines)
+
+    if behind:
+        lines = [f"**{name}** — +{daily:,}" for name, daily in behind]
+        if no_gain:
+            lines.append(SEP)
+        _add_group_field(embed, f"Behind Goal {STATUS_EMOJIS['behind']}", lines)
+
+    if no_gain:
+        lines = [f"**{name}**" for name, _ in no_gain]
+        _add_group_field(embed, f"Did nothing {STATUS_EMOJIS['far_behind']}", lines)
+
+    return embed
+
+
 # ---------------------------------------------------------------------------
 # Post / edit logic
 # ---------------------------------------------------------------------------
@@ -314,6 +434,33 @@ async def _send_or_edit_embeds(
     return str(msg.id)
 
 
+async def send_daily_report(user_ids: list[int], *, api_data: dict | None = None) -> None:
+    """DM the daily fan-gain report to each user in *user_ids*."""
+    if api_data is None:
+        try:
+            api_data = await uma_moe_api.fetch_circle()
+        except Exception as exc:
+            logger.error(f"[Circles] Report API fetch failed: {exc}")
+            return
+
+    circle_ts = api_data.get("circle", {}).get("last_updated", "")
+    members = [m for m in api_data.get("members", []) if m.get("last_updated") == circle_ts]
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        snapshots = await _load_snapshots(conn)
+
+    embed = _build_report_embed(members, snapshots)
+
+    for uid in user_ids:
+        try:
+            user = await bot.fetch_user(uid)
+            await user.send(embed=embed)
+        except Exception as exc:
+            logger.error(f"[Circles] Failed to DM report to {uid}: {exc}")
+
+    logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
+
+
 async def post_or_edit(force: bool = False) -> None:
     if not bot.is_ready():
         return
@@ -341,7 +488,11 @@ async def post_or_edit(force: bool = False) -> None:
         )
         await _set(conn, "circle_header_msg", header_id)
 
-        all_embeds = _build_member_embeds(api_data.get("members", []))
+        current_members = [
+            m for m in api_data.get("members", [])
+            if m.get("last_updated") == last_updated
+        ]
+        all_embeds = _build_member_embeds(current_members)
         batches = [
             all_embeds[i : i + MAX_EMBEDS_PER_MESSAGE]
             for i in range(0, len(all_embeds), MAX_EMBEDS_PER_MESSAGE)
@@ -374,6 +525,7 @@ async def post_or_edit(force: bool = False) -> None:
                 (f"circle_members_msg_{i}",),
             )
 
+        await _save_snapshots(conn, current_members)
         await _set(conn, "last_circle_updated", last_updated)
         await conn.commit()
 
@@ -404,6 +556,7 @@ async def _circle_update_loop() -> None:
 
         try:
             await post_or_edit()
+            await send_daily_report(list(OWNER_USER_IDS))
         except Exception as exc:
             logger.error(f"[Circles] Loop error: {exc}")
 
