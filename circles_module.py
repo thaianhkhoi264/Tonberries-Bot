@@ -79,9 +79,17 @@ async def init_db() -> None:
                 viewer_id    INTEGER PRIMARY KEY,
                 trainer_name TEXT,
                 monthly_fans INTEGER NOT NULL,
-                saved_at     TEXT NOT NULL
+                saved_at     TEXT NOT NULL,
+                year         INTEGER,
+                month        INTEGER
             )
         """)
+        # Migrate existing rows that predate the year/month columns
+        for col in ("year", "month"):
+            try:
+                await conn.execute(f"ALTER TABLE circle_member_snapshots ADD COLUMN {col} INTEGER")
+            except Exception:
+                pass
         await conn.commit()
 
 
@@ -101,23 +109,27 @@ async def _set(conn, key: str, value: str) -> None:
 
 
 async def _save_snapshots(conn, members: list[dict]) -> None:
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     for m in members:
         vid = m.get("viewer_id")
         if vid is None:
             continue
         await conn.execute(
             """INSERT OR REPLACE INTO circle_member_snapshots
-               (viewer_id, trainer_name, monthly_fans, saved_at)
-               VALUES (?, ?, ?, ?)""",
-            (int(vid), m.get("trainer_name", ""), _monthly_gain(m.get("daily_fans") or []), now_iso),
+               (viewer_id, trainer_name, monthly_fans, saved_at, year, month)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (int(vid), m.get("trainer_name", ""), _monthly_gain(m.get("daily_fans") or []),
+             now.isoformat(), now.year, now.month),
         )
 
 
 async def _load_snapshots(conn) -> dict:
+    now = datetime.now(timezone.utc)
     snapshots: dict = {}
     async with conn.execute(
-        "SELECT viewer_id, trainer_name, monthly_fans FROM circle_member_snapshots"
+        "SELECT viewer_id, trainer_name, monthly_fans FROM circle_member_snapshots "
+        "WHERE year=? AND month=?",
+        (now.year, now.month),
     ) as cur:
         async for row in cur:
             snapshots[row[0]] = {"trainer_name": row[1], "monthly_fans": row[2]}
@@ -471,7 +483,7 @@ async def send_daily_report(
     logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
 
 
-async def post_or_edit(force: bool = False) -> None:
+async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> bool:
     if not bot.is_ready():
         return
 
@@ -489,9 +501,12 @@ async def post_or_edit(force: bool = False) -> None:
     last_updated = api_data.get("circle", {}).get("last_updated", "")
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
-        if not force and await _get(conn, "last_circle_updated") == last_updated:
+        stored_last_updated = await _get(conn, "last_circle_updated")
+        is_new_data = stored_last_updated != last_updated
+
+        if not force and not is_new_data:
             logger.debug("[Circles] Data unchanged since last post — skipping")
-            return
+            return False
 
         header_id = await _send_or_edit_embed(
             channel, conn, "circle_header_msg", _build_club_embed(api_data)
@@ -535,7 +550,8 @@ async def post_or_edit(force: bool = False) -> None:
                 (f"circle_members_msg_{i}",),
             )
 
-        await _save_snapshots(conn, current_members)
+        if save_snapshots or is_new_data:
+            await _save_snapshots(conn, current_members)
         await _set(conn, "last_circle_updated", last_updated)
         await conn.commit()
 
@@ -545,6 +561,7 @@ async def post_or_edit(force: bool = False) -> None:
         f"rank #{api_data.get('circle', {}).get('monthly_rank', '?')}, "
         f"{len(all_embeds)} member embed(s) in {len(batches)} message(s)"
     )
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -567,8 +584,11 @@ async def _circle_update_loop() -> None:
         try:
             async with aiosqlite.connect(LOCAL_DB) as conn:
                 old_snapshots = await _load_snapshots(conn)
-            await post_or_edit()
-            await send_daily_report(list(OWNER_USER_IDS), snapshots=old_snapshots)
+            updated = await post_or_edit(save_snapshots=True)
+            if updated:
+                await send_daily_report(list(OWNER_USER_IDS), snapshots=old_snapshots)
+            else:
+                logger.info("[Circles] API data unchanged — skipping daily report")
         except Exception as exc:
             logger.error(f"[Circles] Loop error: {exc}")
 
