@@ -464,8 +464,12 @@ async def send_daily_report(
             logger.error(f"[Circles] Report API fetch failed: {exc}")
             return
 
-    circle_ts = api_data.get("circle", {}).get("last_updated", "")
-    members = [m for m in api_data.get("members", []) if m.get("last_updated") == circle_ts]
+    _raw = api_data.get("members", [])
+    _current_ts = (
+        max((m.get("last_updated", "") for m in _raw), default="")
+        or api_data.get("circle", {}).get("last_updated", "")
+    )
+    members = [m for m in _raw if m.get("last_updated") == _current_ts]
 
     if snapshots is None:
         async with aiosqlite.connect(LOCAL_DB) as conn:
@@ -498,7 +502,11 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         logger.error(f"[Circles] API fetch failed: {exc}")
         return
 
-    last_updated = api_data.get("circle", {}).get("last_updated", "")
+    _raw_members = api_data.get("members", [])
+    last_updated = (
+        max((m.get("last_updated", "") for m in _raw_members), default="")
+        or api_data.get("circle", {}).get("last_updated", "")
+    )
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         stored_last_updated = await _get(conn, "last_circle_updated")
