@@ -1,7 +1,6 @@
 import os
 
 # Tonberries-Bot Configuration
-# Fill in OWNER_USER_ID, MAIN_SERVER_ID, and all channel IDs before first run.
 
 OWNER_USER_IDS          = (680653908259110914, 0)  # Discord user IDs allowed to DM-command the bot
 MAIN_SERVER_ID          = 0  # Discord guild (server) ID for the Tonberries server
@@ -9,6 +8,8 @@ MAIN_SERVER_ID          = 0  # Discord guild (server) ID for the Tonberries serv
 ONGOING_CHANNEL_ID      = 0  # Channel for currently active UMA events
 UPCOMING_CHANNEL_ID     = 0  # Channel for upcoming UMA events
 NOTIFICATION_CHANNEL_ID = 0  # Channel where notification messages are posted
+
+GENERAL_CHANNEL_ID = 0  # uma-chat-v2 channel
 
 # Absolute path to Gacha-Timer-Bot on the same Pi
 GACHA_BOT_DIR = "/home/piberry/Gacha-Timer-Bot"
