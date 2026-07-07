@@ -91,6 +91,8 @@ async def on_message(message: discord.Message):
         await _cmd_circles(message)
     elif cmd_lower == "report":
         await _cmd_report(message)
+    elif cmd_lower in ("shaming on", "shaming off"):
+        await _cmd_shaming(message, cmd_lower == "shaming on")
     elif cmd_lower == "skill refresh":
         await _cmd_skill_refresh(message)
     elif cmd_lower.startswith("skill "):
@@ -110,6 +112,7 @@ async def _cmd_help(message: discord.Message):
         "`pending` — List all notifications scheduled in the next 3 days\n"
         "`circles` — Force-refresh the club circle stats\n"
         "`report` — Force-send the daily fan report to you\n"
+        "`shaming on/off` — Toggle posting the daily report to uma-chat-v2\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -158,6 +161,12 @@ async def _cmd_report(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Report failed: {exc}")
         await message.channel.send(f"Report failed: {exc}")
+
+
+async def _cmd_shaming(message: discord.Message, enable: bool) -> None:
+    await circles_module.set_shaming_enabled(enable)
+    state = "on" if enable else "off"
+    await message.channel.send(f"Public shaming turned **{state}**.")
 
 
 async def _cmd_circles(message: discord.Message):

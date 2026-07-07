@@ -9,7 +9,7 @@ import discord
 
 import uma_moe_api
 from bot import bot, logger
-from global_config import CIRCLE_CHANNEL_ID, LOCAL_DB, OWNER_USER_IDS
+from global_config import CIRCLE_CHANNEL_ID, GENERAL_CHANNEL_ID, LOCAL_DB, OWNER_USER_IDS
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -134,6 +134,18 @@ async def _load_snapshots(conn) -> dict:
         async for row in cur:
             snapshots[row[0]] = {"trainer_name": row[1], "monthly_fans": row[2]}
     return snapshots
+
+
+async def get_shaming_enabled() -> bool:
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        val = await _get(conn, "shaming_enabled")
+    return val == "1"
+
+
+async def set_shaming_enabled(enabled: bool) -> None:
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _set(conn, "shaming_enabled", "1" if enabled else "0")
+        await conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -451,11 +463,14 @@ async def send_daily_report(
     *,
     api_data: dict | None = None,
     snapshots: dict | None = None,
+    post_channel_id: int | None = None,
 ) -> None:
     """DM the daily fan-gain report to each user in *user_ids*.
 
     Pass *snapshots* to use pre-loaded snapshot data (e.g. captured before the
     current pull overwrites them).  If omitted, snapshots are loaded from DB.
+    Pass *post_channel_id* to also post the embed to a channel (used for
+    the public shaming feature).
     """
     if api_data is None:
         try:
@@ -483,6 +498,14 @@ async def send_daily_report(
             await user.send(embed=embed)
         except Exception as exc:
             logger.error(f"[Circles] Failed to DM report to {uid}: {exc}")
+
+    if post_channel_id is not None:
+        channel = bot.get_channel(post_channel_id)
+        if channel:
+            try:
+                await channel.send(embed=embed)
+            except Exception as exc:
+                logger.error(f"[Circles] Failed to post report to channel {post_channel_id}: {exc}")
 
     logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
 
@@ -594,7 +617,12 @@ async def _circle_update_loop() -> None:
                 old_snapshots = await _load_snapshots(conn)
             updated = await post_or_edit(save_snapshots=True)
             if updated:
-                await send_daily_report(list(OWNER_USER_IDS), snapshots=old_snapshots)
+                shaming = await get_shaming_enabled()
+                await send_daily_report(
+                    list(OWNER_USER_IDS),
+                    snapshots=old_snapshots,
+                    post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
+                )
             else:
                 logger.info("[Circles] API data unchanged — skipping daily report")
         except Exception as exc:
