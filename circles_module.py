@@ -581,7 +581,7 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
                 (f"circle_members_msg_{i}",),
             )
 
-        if save_snapshots or is_new_data:
+        if save_snapshots:
             await _save_snapshots(conn, current_members)
         await _set(conn, "last_circle_updated", last_updated)
         await conn.commit()
@@ -596,10 +596,28 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
 
 
 # ---------------------------------------------------------------------------
-# Background loop + startup
+# Background loops + startup
 # ---------------------------------------------------------------------------
 
+async def _circle_hourly_loop() -> None:
+    """Refresh the circle channel embeds every hour at XX:15."""
+    while True:
+        now      = datetime.now(timezone.utc)
+        next_run = now.replace(minute=15, second=0, microsecond=0)
+        if now >= next_run:
+            next_run += timedelta(hours=1)
+
+        wait_secs = (next_run - now).total_seconds()
+        await asyncio.sleep(wait_secs)
+
+        try:
+            await post_or_edit()
+        except Exception as exc:
+            logger.error(f"[Circles] Hourly refresh error: {exc}")
+
+
 async def _circle_update_loop() -> None:
+    """Send the daily fan report once per day at UPDATE_HOUR_UTC."""
     while True:
         now          = datetime.now(timezone.utc)
         today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=0, second=0, microsecond=0)
@@ -607,24 +625,32 @@ async def _circle_update_loop() -> None:
 
         wait_secs = (next_run - now).total_seconds()
         logger.info(
-            f"[Circles] Next scheduled pull in {wait_secs / 3600:.1f}h "
+            f"[Circles] Next daily report in {wait_secs / 3600:.1f}h "
             f"at {next_run.strftime('%Y-%m-%d %H:%M UTC')}"
         )
         await asyncio.sleep(wait_secs)
 
         try:
+            today = datetime.now(timezone.utc).date().isoformat()
             async with aiosqlite.connect(LOCAL_DB) as conn:
                 old_snapshots = await _load_snapshots(conn)
-            updated = await post_or_edit(save_snapshots=True)
-            if updated:
-                shaming = await get_shaming_enabled()
-                await send_daily_report(
-                    list(OWNER_USER_IDS),
-                    snapshots=old_snapshots,
-                    post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
-                )
-            else:
-                logger.info("[Circles] API data unchanged — skipping daily report")
+                last_report_date = await _get(conn, "last_report_date")
+
+            if last_report_date == today:
+                logger.info("[Circles] Daily report already sent today — skipping")
+                continue
+
+            await post_or_edit(force=True, save_snapshots=True)
+            shaming = await get_shaming_enabled()
+            await send_daily_report(
+                list(OWNER_USER_IDS),
+                snapshots=old_snapshots,
+                post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
+            )
+
+            async with aiosqlite.connect(LOCAL_DB) as conn:
+                await _set(conn, "last_report_date", today)
+                await conn.commit()
         except Exception as exc:
             logger.error(f"[Circles] Loop error: {exc}")
 
@@ -632,5 +658,6 @@ async def _circle_update_loop() -> None:
 async def start_background_task() -> None:
     await init_db()
     await post_or_edit(force=True)
+    asyncio.create_task(_circle_hourly_loop())
     asyncio.create_task(_circle_update_loop())
-    logger.info("[Circles] Background task started")
+    logger.info("[Circles] Background tasks started")
