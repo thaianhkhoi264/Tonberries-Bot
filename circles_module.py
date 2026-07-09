@@ -484,7 +484,16 @@ async def send_daily_report(
         max((m.get("last_updated", "") for m in _raw), default="")
         or api_data.get("circle", {}).get("last_updated", "")
     )
-    members = [m for m in _raw if m.get("last_updated") == _current_ts]
+    _cutoff = (
+        datetime.fromisoformat(_current_ts.replace("Z", "+00:00")) - timedelta(hours=24)
+        if _current_ts else None
+    )
+    members = [
+        m for m in _raw
+        if _cutoff is not None
+        and m.get("last_updated")
+        and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
+    ]
 
     if snapshots is None:
         async with aiosqlite.connect(LOCAL_DB) as conn:
@@ -544,9 +553,15 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         )
         await _set(conn, "circle_header_msg", header_id)
 
+        _cutoff = (
+            datetime.fromisoformat(last_updated.replace("Z", "+00:00")) - timedelta(hours=24)
+            if last_updated else None
+        )
         current_members = [
-            m for m in api_data.get("members", [])
-            if m.get("last_updated") == last_updated
+            m for m in _raw_members
+            if _cutoff is not None
+            and m.get("last_updated")
+            and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
         ]
         all_embeds = _build_member_embeds(current_members)
         batches = [
