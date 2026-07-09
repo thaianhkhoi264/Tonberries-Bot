@@ -187,12 +187,12 @@ def _next_rank_emoji(tier: str) -> str:
 
 
 def _next_update_ts() -> int:
-    """Unix timestamp of the next scheduled 16:00 UTC pull."""
-    now = datetime.now(timezone.utc)
-    today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=0, second=0, microsecond=0)
-    if now >= today_update:
-        return int((today_update + timedelta(days=1)).timestamp())
-    return int(today_update.timestamp())
+    """Unix timestamp of the next scheduled hourly refresh (XX:15 UTC)."""
+    now      = datetime.now(timezone.utc)
+    next_run = now.replace(minute=15, second=0, microsecond=0)
+    if now >= next_run:
+        next_run += timedelta(hours=1)
+    return int(next_run.timestamp())
 
 
 def _member_status(gained: int) -> MemberStatus:
