@@ -386,16 +386,15 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
         embed.description = "No members."
         return embed
 
-    # Color driven by whichever group has the most members; ties favour the worse status
-    dominant_color = max(
-        [
-            (len(no_gain),  STATUS_COLORS["far_behind"]),
-            (len(behind),   STATUS_COLORS["behind"]),
-            (len(goal_met), STATUS_COLORS["goal_met"]),
-        ],
-        key=lambda x: x[0],
-    )[1]
-    embed.colour = dominant_color
+    # Color driven by total daily fans vs collective daily quota
+    total_daily    = sum(d for _, d in goal_met) + sum(d for _, d in behind)
+    total_required = daily_quota * len(members)
+    if total_daily >= total_required:
+        embed.colour = STATUS_COLORS["goal_met"]
+    elif total_daily >= total_required * 0.75:
+        embed.colour = STATUS_COLORS["behind"]
+    else:
+        embed.colour = STATUS_COLORS["far_behind"]
 
     SEP = "\u2500" * 28
 
