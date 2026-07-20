@@ -234,11 +234,11 @@ def _classify_lists(members: list[dict]) -> tuple[list[dict], list[dict]]:
             "gains3":       gains3,
         }
 
-        # Hitlist: all 3 gains ≤ 10k AND needs 3M+/day (checked first, takes priority)
-        if all(g <= 10_000 for g in gains3) and daily_needed >= 3_000_000:
+        # Hitlist: all 3 gains ≤ 10k AND needs 2× daily_quota+/day (checked first, takes priority)
+        if all(g <= 10_000 for g in gains3) and daily_needed >= 2 * daily_quota:
             hitlist.append(entry)
-        # Watchlist: not reached goal AND all 3 gains < daily_quota AND needs 2M+/day
-        elif all(g < daily_quota for g in gains3) and daily_needed >= 2_000_000:
+        # Watchlist: not reached goal AND all 3 gains < daily_quota AND needs 1.5× daily_quota+/day
+        elif all(g < daily_quota for g in gains3) and daily_needed >= int(1.5 * daily_quota):
             watchlist.append(entry)
 
     return watchlist, hitlist
@@ -698,16 +698,6 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return False
 
-        # Delete existing watchlist/hitlist messages so they're always re-posted last
-        for key in ("circle_watchlist_msg", "circle_hitlist_msg"):
-            mid = await _get(conn, key)
-            if mid:
-                try:
-                    await channel.get_partial_message(int(mid)).delete()
-                except discord.NotFound:
-                    pass
-                await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
-
         header_id = await _send_or_edit_embed(
             channel, conn, "circle_header_msg", _build_club_embed(api_data)
         )
@@ -756,8 +746,19 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
                 (f"circle_members_msg_{i}",),
             )
 
-        # Post watchlist and hitlist — always at the bottom of the channel
+        # Post watchlist and hitlist at the bottom.
+        # If new member batch messages were posted, the existing list messages are now
+        # out of order — delete them so _send_or_edit_embed re-posts them at the end.
         wl_entries, hl_entries = _classify_lists(current_members)
+        if len(new_ids) > len(old_ids):
+            for key in ("circle_watchlist_msg", "circle_hitlist_msg"):
+                mid = await _get(conn, key)
+                if mid:
+                    try:
+                        await channel.get_partial_message(int(mid)).delete()
+                    except discord.NotFound:
+                        pass
+                    await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
         wl_id = await _send_or_edit_embed(
             channel, conn, "circle_watchlist_msg", _build_watchlist_embed(wl_entries)
         )
