@@ -1,5 +1,6 @@
 import asyncio
 import calendar
+import json
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -35,6 +36,7 @@ STATUS_EMOJIS = {
     "on_track":   "<a:dianod:1508662343322697839>",
     "behind":     "<a:diashake:1508662342060081253>",
     "far_behind": "<a:diastare:1508665580071161967>",
+    "hitlist":    "<:diascared:1528840090451837088>"
 }
 
 STATUS_COLORS = {
@@ -172,6 +174,74 @@ def _monthly_gain(daily_fans: list[int]) -> int:
 
 def _is_inactive(daily_fans: list[int]) -> bool:
     return _monthly_gain(daily_fans) == 0
+
+
+def _last_daily_gains(daily_fans: list[int], n: int = 3) -> list[int]:
+    """Return fan gains for the last *n* calendar days (today-n+1 through today).
+
+    daily_fans[i] is cumulative lifetime fans as of day i.  daily_fans[0] may
+    be negative — a baseline marker storing the previous month's total negated.
+    """
+    now   = datetime.now(timezone.utc)
+    today = now.day
+    gains = []
+    for day in range(max(1, today - n + 1), today + 1):
+        if 1 <= day < len(daily_fans):
+            curr = daily_fans[day]
+            prev = daily_fans[day - 1]
+            if curr > 0 and prev < 0:
+                # Day 1: prev is the negative baseline marker
+                gains.append(max(0, curr - abs(prev)))
+            elif curr > 0 and prev > 0:
+                gains.append(max(0, curr - prev))
+            else:
+                gains.append(0)
+        else:
+            gains.append(0)
+    return gains
+
+
+def _classify_lists(members: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Classify members into (watchlist_entries, hitlist_entries).
+
+    Each entry: {"viewer_id": int, "trainer_name": str, "daily_needed": int, "gains3": list[int]}
+    Hitlist takes priority and is checked first.
+    """
+    now            = datetime.now(timezone.utc)
+    days_in_month  = calendar.monthrange(now.year, now.month)[1]
+    days_remaining = days_in_month - now.day
+    daily_quota    = MONTHLY_REQUIREMENT // days_in_month
+
+    watchlist: list[dict] = []
+    hitlist:   list[dict] = []
+
+    for m in members:
+        df           = m.get("daily_fans") or []
+        monthly_gain = _monthly_gain(df)
+        gains3       = _last_daily_gains(df, n=3)
+
+        # Members who reached the goal are never on either list
+        if monthly_gain >= MONTHLY_REQUIREMENT or days_remaining <= 0:
+            continue
+
+        remaining    = MONTHLY_REQUIREMENT - monthly_gain
+        daily_needed = math.ceil(remaining / days_remaining)
+
+        entry: dict = {
+            "viewer_id":    m.get("viewer_id"),
+            "trainer_name": m.get("trainer_name", "Unknown"),
+            "daily_needed": daily_needed,
+            "gains3":       gains3,
+        }
+
+        # Hitlist: all 3 gains ≤ 10k AND needs 3M+/day (checked first, takes priority)
+        if all(g <= 10_000 for g in gains3) and daily_needed >= 3_000_000:
+            hitlist.append(entry)
+        # Watchlist: not reached goal AND all 3 gains < daily_quota AND needs 2M+/day
+        elif all(g < daily_quota for g in gains3) and daily_needed >= 2_000_000:
+            watchlist.append(entry)
+
+    return watchlist, hitlist
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +487,44 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
     return embed
 
 
+def _build_watchlist_embed(entries: list[dict]) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"Dia's Watchlist {STATUS_EMOJIS['far_behind']}",
+        colour=STATUS_COLORS["behind"],
+    )
+    if not entries:
+        embed.description = "*Nobody here — great work!*"
+    else:
+        lines = []
+        for e in sorted(entries, key=lambda x: x["daily_needed"], reverse=True):
+            g = e["gains3"]
+            lines.append(
+                f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
+                f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
+            )
+        embed.description = "\n".join(lines)
+    return embed
+
+
+def _build_hitlist_embed(entries: list[dict]) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"Dia's Hitlist {STATUS_EMOJIS['hitlist']}",
+        colour=STATUS_COLORS["far_behind"],
+    )
+    if not entries:
+        embed.description = "*Nobody here — great work!*"
+    else:
+        lines = []
+        for e in sorted(entries, key=lambda x: x["daily_needed"], reverse=True):
+            g = e["gains3"]
+            lines.append(
+                f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
+                f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
+            )
+        embed.description = "\n".join(lines)
+    return embed
+
+
 # ---------------------------------------------------------------------------
 # Post / edit logic
 # ---------------------------------------------------------------------------
@@ -500,6 +608,39 @@ async def send_daily_report(
 
     embed = _build_report_embed(members, snapshots)
 
+    # Compute watchlist/hitlist and append any list-change section
+    wl_entries, hl_entries = _classify_lists(members)
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        prev_wl_json = await _get(conn, "circle_prev_watchlist")
+        prev_hl_json = await _get(conn, "circle_prev_hitlist")
+
+    prev_wl: list[dict] = json.loads(prev_wl_json) if prev_wl_json else []
+    prev_hl: list[dict] = json.loads(prev_hl_json) if prev_hl_json else []
+
+    prev_wl_ids   = {int(e["viewer_id"]) for e in prev_wl}
+    prev_hl_ids   = {int(e["viewer_id"]) for e in prev_hl}
+    prev_wl_names = {int(e["viewer_id"]): e["trainer_name"] for e in prev_wl}
+    prev_hl_names = {int(e["viewer_id"]): e["trainer_name"] for e in prev_hl}
+    curr_wl_ids   = {int(e["viewer_id"]) for e in wl_entries if e["viewer_id"] is not None}
+    curr_hl_ids   = {int(e["viewer_id"]) for e in hl_entries if e["viewer_id"] is not None}
+    curr_wl_names = {int(e["viewer_id"]): e["trainer_name"] for e in wl_entries if e["viewer_id"] is not None}
+    curr_hl_names = {int(e["viewer_id"]): e["trainer_name"] for e in hl_entries if e["viewer_id"] is not None}
+
+    change_lines: list[str] = []
+    for vid in sorted(curr_hl_ids - prev_hl_ids, key=lambda v: curr_hl_names.get(v, "")):
+        change_lines.append(f"{STATUS_EMOJIS['hitlist']} **{curr_hl_names[vid]}** added to Hitlist")
+    for vid in sorted(prev_hl_ids - curr_hl_ids, key=lambda v: prev_hl_names.get(v, "")):
+        change_lines.append(f"➖ **{prev_hl_names[vid]}** removed from Hitlist")
+    for vid in sorted(curr_wl_ids - prev_wl_ids, key=lambda v: curr_wl_names.get(v, "")):
+        change_lines.append(f"{STATUS_EMOJIS['far_behind']} **{curr_wl_names[vid]}** added to Watchlist")
+    for vid in sorted(prev_wl_ids - curr_wl_ids, key=lambda v: prev_wl_names.get(v, "")):
+        change_lines.append(f"➖ **{prev_wl_names[vid]}** removed from Watchlist")
+
+    if change_lines:
+        SEP = "\u2500" * 28
+        _add_group_field(embed, "List Changes (last 24h)", [SEP] + change_lines)
+
     for uid in user_ids:
         try:
             user = await bot.fetch_user(uid)
@@ -514,6 +655,16 @@ async def send_daily_report(
                 await channel.send(embed=embed)
             except Exception as exc:
                 logger.error(f"[Circles] Failed to post report to channel {post_channel_id}: {exc}")
+
+    # Persist current list state so tomorrow's report can diff against it
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _set(conn, "circle_prev_watchlist", json.dumps(
+            [{"viewer_id": e["viewer_id"], "trainer_name": e["trainer_name"]} for e in wl_entries]
+        ))
+        await _set(conn, "circle_prev_hitlist", json.dumps(
+            [{"viewer_id": e["viewer_id"], "trainer_name": e["trainer_name"]} for e in hl_entries]
+        ))
+        await conn.commit()
 
     logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
 
@@ -546,6 +697,16 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         if not force and not is_new_data:
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return False
+
+        # Delete existing watchlist/hitlist messages so they're always re-posted last
+        for key in ("circle_watchlist_msg", "circle_hitlist_msg"):
+            mid = await _get(conn, key)
+            if mid:
+                try:
+                    await channel.get_partial_message(int(mid)).delete()
+                except discord.NotFound:
+                    pass
+                await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
 
         header_id = await _send_or_edit_embed(
             channel, conn, "circle_header_msg", _build_club_embed(api_data)
@@ -594,6 +755,17 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
                 "DELETE FROM circle_messages WHERE key=?",
                 (f"circle_members_msg_{i}",),
             )
+
+        # Post watchlist and hitlist — always at the bottom of the channel
+        wl_entries, hl_entries = _classify_lists(current_members)
+        wl_id = await _send_or_edit_embed(
+            channel, conn, "circle_watchlist_msg", _build_watchlist_embed(wl_entries)
+        )
+        hl_id = await _send_or_edit_embed(
+            channel, conn, "circle_hitlist_msg", _build_hitlist_embed(hl_entries)
+        )
+        await _set(conn, "circle_watchlist_msg", wl_id)
+        await _set(conn, "circle_hitlist_msg", hl_id)
 
         if save_snapshots:
             await _save_snapshots(conn, current_members)
