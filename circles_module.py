@@ -257,12 +257,14 @@ def _next_rank_emoji(tier: str) -> str:
 
 
 def _next_update_ts() -> int:
-    """Unix timestamp of the next scheduled hourly refresh (XX:15 UTC)."""
-    now      = datetime.now(timezone.utc)
-    next_run = now.replace(minute=15, second=0, microsecond=0)
-    if now >= next_run:
-        next_run += timedelta(hours=1)
-    return int(next_run.timestamp())
+    """Unix timestamp of the next scheduled refresh (XX:15, XX:35, or XX:55 UTC)."""
+    now = datetime.now(timezone.utc)
+    for minute in (15, 35, 55):
+        candidate = now.replace(minute=minute, second=0, microsecond=0)
+        if candidate > now:
+            return int(candidate.timestamp())
+    # All three passed this hour; wrap to next hour's :15
+    return int((now + timedelta(hours=1)).replace(minute=15, second=0, microsecond=0).timestamp())
 
 
 def _member_status(gained: int) -> MemberStatus:
@@ -487,22 +489,30 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
     return embed
 
 
+def _format_list_line(e: dict) -> str:
+    g    = e["gains3"]
+    text = (
+        f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
+        f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
+    )
+    return f"~~{text}~~" if e.get("sniped") else text
+
+
+def _build_list_lines(entries: list[dict]) -> list[str]:
+    active  = [e for e in entries if not e.get("sniped")]
+    sniped  = [e for e in entries if e.get("sniped")]
+    lines   = [_format_list_line(e) for e in sorted(active, key=lambda x: x["daily_needed"], reverse=True)]
+    lines  += [_format_list_line(e) for e in sorted(sniped, key=lambda x: x["daily_needed"], reverse=True)]
+    return lines
+
+
 def _build_watchlist_embed(entries: list[dict]) -> discord.Embed:
     embed = discord.Embed(
         title=f"Dia's Watchlist {STATUS_EMOJIS['far_behind']}",
         colour=STATUS_COLORS["behind"],
     )
-    if not entries:
-        embed.description = "*Nobody here — great work!*"
-    else:
-        lines = []
-        for e in sorted(entries, key=lambda x: x["daily_needed"], reverse=True):
-            g = e["gains3"]
-            lines.append(
-                f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
-                f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
-            )
-        embed.description = "\n".join(lines)
+    lines = _build_list_lines(entries)
+    embed.description = "\n".join(lines) if lines else "*Nobody here — great work!*"
     return embed
 
 
@@ -511,17 +521,8 @@ def _build_hitlist_embed(entries: list[dict]) -> discord.Embed:
         title=f"Dia's Hitlist {STATUS_EMOJIS['hitlist']}",
         colour=STATUS_COLORS["far_behind"],
     )
-    if not entries:
-        embed.description = "*Nobody here — great work!*"
-    else:
-        lines = []
-        for e in sorted(entries, key=lambda x: x["daily_needed"], reverse=True):
-            g = e["gains3"]
-            lines.append(
-                f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
-                f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
-            )
-        embed.description = "\n".join(lines)
+    lines = _build_list_lines(entries)
+    embed.description = "\n".join(lines) if lines else "*Nobody here — great work!*"
     return embed
 
 
@@ -746,10 +747,29 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
                 (f"circle_members_msg_{i}",),
             )
 
-        # Post watchlist and hitlist at the bottom.
+        # Build watchlist/hitlist, carrying forward sniped (kicked) members.
+        prev_wl_json = await _get(conn, "circle_cur_watchlist")
+        prev_hl_json = await _get(conn, "circle_cur_hitlist")
+        prev_wl_all: list[dict] = json.loads(prev_wl_json) if prev_wl_json else []
+        prev_hl_all: list[dict] = json.loads(prev_hl_json) if prev_hl_json else []
+
+        # viewer_ids present anywhere in the full (unfiltered) API response
+        all_member_ids = {int(m["viewer_id"]) for m in _raw_members if m.get("viewer_id")}
+
+        def _carry_sniped(prev_all: list[dict]) -> list[dict]:
+            """Keep entries from the previous list whose member left the circle."""
+            return [
+                {**e, "sniped": True}
+                for e in prev_all
+                if int(e["viewer_id"]) not in all_member_ids
+            ]
+
+        wl_entries, hl_entries = _classify_lists(current_members)
+        full_wl = wl_entries + _carry_sniped(prev_wl_all)
+        full_hl = hl_entries + _carry_sniped(prev_hl_all)
+
         # If new member batch messages were posted, the existing list messages are now
         # out of order — delete them so _send_or_edit_embed re-posts them at the end.
-        wl_entries, hl_entries = _classify_lists(current_members)
         if len(new_ids) > len(old_ids):
             for key in ("circle_watchlist_msg", "circle_hitlist_msg"):
                 mid = await _get(conn, key)
@@ -760,13 +780,28 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
                         pass
                     await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
         wl_id = await _send_or_edit_embed(
-            channel, conn, "circle_watchlist_msg", _build_watchlist_embed(wl_entries)
+            channel, conn, "circle_watchlist_msg", _build_watchlist_embed(full_wl)
         )
         hl_id = await _send_or_edit_embed(
-            channel, conn, "circle_hitlist_msg", _build_hitlist_embed(hl_entries)
+            channel, conn, "circle_hitlist_msg", _build_hitlist_embed(full_hl)
         )
         await _set(conn, "circle_watchlist_msg", wl_id)
         await _set(conn, "circle_hitlist_msg", hl_id)
+
+        # Persist full list state (active + sniped) for next update's snipe detection
+        def _serialise_list(entries: list[dict]) -> str:
+            return json.dumps([
+                {
+                    "viewer_id":    e["viewer_id"],
+                    "trainer_name": e["trainer_name"],
+                    "daily_needed": e["daily_needed"],
+                    "gains3":       e["gains3"],
+                    "sniped":       e.get("sniped", False),
+                }
+                for e in entries
+            ])
+        await _set(conn, "circle_cur_watchlist", _serialise_list(full_wl))
+        await _set(conn, "circle_cur_hitlist",   _serialise_list(full_hl))
 
         if save_snapshots:
             await _save_snapshots(conn, current_members)
@@ -787,20 +822,24 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
 # ---------------------------------------------------------------------------
 
 async def _circle_hourly_loop() -> None:
-    """Refresh the circle channel embeds every hour at XX:15."""
+    """Refresh the circle channel embeds every 20 minutes at XX:15, XX:35, XX:55."""
     while True:
         now      = datetime.now(timezone.utc)
-        next_run = now.replace(minute=15, second=0, microsecond=0)
-        if now >= next_run:
-            next_run += timedelta(hours=1)
+        next_run = None
+        for minute in (15, 35, 55):
+            candidate = now.replace(minute=minute, second=0, microsecond=0)
+            if candidate > now:
+                next_run = candidate
+                break
+        if next_run is None:
+            next_run = (now + timedelta(hours=1)).replace(minute=15, second=0, microsecond=0)
 
-        wait_secs = (next_run - now).total_seconds()
-        await asyncio.sleep(wait_secs)
+        await asyncio.sleep((next_run - now).total_seconds())
 
         try:
             await post_or_edit()
         except Exception as exc:
-            logger.error(f"[Circles] Hourly refresh error: {exc}")
+            logger.error(f"[Circles] Refresh error: {exc}")
 
 
 async def _circle_update_loop() -> None:
