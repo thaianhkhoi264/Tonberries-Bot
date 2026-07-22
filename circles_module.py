@@ -753,8 +753,10 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         prev_wl_all: list[dict] = json.loads(prev_wl_json) if prev_wl_json else []
         prev_hl_all: list[dict] = json.loads(prev_hl_json) if prev_hl_json else []
 
-        # viewer_ids present anywhere in the full (unfiltered) API response
-        all_member_ids = {int(m["viewer_id"]) for m in _raw_members if m.get("viewer_id")}
+        # viewer_ids present in the 24h-filtered member list.
+        # Members absent here were either kicked or haven't updated in >24h — both
+        # are treated the same way (the 24h rule is the club's membership boundary).
+        all_member_ids = {int(m["viewer_id"]) for m in current_members if m.get("viewer_id")}
 
         def _carry_sniped(prev_all: list[dict]) -> list[dict]:
             """Keep entries from the previous list whose member left the circle."""
