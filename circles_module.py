@@ -490,12 +490,13 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
 
 
 def _format_list_line(e: dict) -> str:
-    g    = e["gains3"]
-    text = (
+    if e.get("sniped"):
+        return f"~~**{e['trainer_name']}**~~ - Eliminated"
+    g = e["gains3"]
+    return (
         f"**{e['trainer_name']}** — {e['daily_needed']:,}/day needed · "
         f"last 3d: {g[0]:,} / {g[1]:,} / {g[2]:,}"
     )
-    return f"~~{text}~~" if e.get("sniped") else text
 
 
 def _build_list_lines(entries: list[dict]) -> list[str]:
