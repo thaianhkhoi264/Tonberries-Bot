@@ -10,6 +10,7 @@ import uma_module
 import notification_module
 import circles_module
 import skills_module
+import autotrain_module
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +43,7 @@ async def on_ready():
     await uma_module.init_local_db()
     await uma_module.start_background_tasks()
     await circles_module.start_background_task()
+    await autotrain_module.restore_timers()
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")
     await _send_restart_dm()
@@ -66,16 +68,29 @@ async def _send_restart_dm() -> None:
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Only handle DMs from the owner
+    # Only handle DMs, never from bots
     if message.guild is not None:
-        return
-    if message.author.id not in OWNER_USER_IDS:
         return
     if message.author.bot:
         return
 
-    cmd = message.content.strip()
+    cmd       = message.content.strip()
     cmd_lower = cmd.lower()
+
+    # Public commands — available to any user in DMs
+    if cmd_lower.startswith("autotrain "):
+        await autotrain_module.handle_auto(message, cmd[len("autotrain "):])
+        return
+    if cmd_lower.startswith("auto "):
+        await autotrain_module.handle_auto(message, cmd[len("auto "):])
+        return
+    if cmd_lower == "renew":
+        await autotrain_module.handle_renew(message)
+        return
+
+    # Everything below is owner-only — silently ignore all other users
+    if message.author.id not in OWNER_USER_IDS:
+        return
 
     if cmd_lower == "help":
         await _cmd_help(message)
