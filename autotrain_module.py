@@ -2,9 +2,10 @@
 Auto-train reminder module.
 
 Any Discord user can DM the bot:
-  auto <text>      — start a 49m 30s countdown timer
-  autotrain <text> — same as above
+  auto [text]      — start a 49m 30s countdown timer (text is optional)
+  autotrain [text] — same as above
   renew            — repeat the last timer with the same text
+  end              — finish the running timer early
 
 On completion the timer message is deleted and a completion DM is sent.
 Timer state persists across bot restarts; if the bot comes back after a
@@ -25,6 +26,27 @@ TIMER_DURATION = timedelta(minutes=49, seconds=30)
 
 # Active asyncio tasks keyed by user_id — lets us cancel on re-trigger
 _active_tasks: dict[int, asyncio.Task] = {}
+
+
+# ---------------------------------------------------------------------------
+# Message helpers
+# ---------------------------------------------------------------------------
+
+def _timer_text(text: str, end_ts: int) -> str:
+    prefix = f"**{text}** Independent" if text else "Independent"
+    return (
+        f"{prefix} training will end in <t:{end_ts}:R>.\n"
+        "Use `end` to finish early, or `renew` to restart the timer."
+    )
+
+
+def _done_text(text: str) -> str:
+    subject  = f"Your **{text}** Independent" if text else "Your Independent"
+    auto_cmd = f"`auto {text}`" if text else "`auto`"
+    return (
+        f"{subject} Training is complete! I'm excited to see how well that went!\n\n"
+        f"You can use {auto_cmd} to start a new reminder, or `renew` to start another reminder."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -109,13 +131,8 @@ async def _run_timer(user_id: int, text: str, ends_at: datetime, timer_msg_id: i
             pass  # Already deleted or unavailable — carry on
 
     # Send the completion message
-    done_text = (
-        f"Your **{text}** Independent Training is complete! "
-        f"I'm excited to see how well that went!\n\n"
-        f"You can use `auto {text}` to start a new reminder, or `renew` to start another reminder."
-    )
     try:
-        done_msg = await dm.send(done_text)
+        done_msg = await dm.send(_done_text(text))
     except Exception as exc:
         logger.error(f"[AutoTrain] Could not send completion to {user_id}: {exc}")
         _active_tasks.pop(user_id, None)
@@ -144,12 +161,8 @@ def _schedule(user_id: int, text: str, ends_at: datetime, timer_msg_id: int | No
 # ---------------------------------------------------------------------------
 
 async def handle_auto(message: discord.Message, text: str) -> None:
-    """Handle `auto <text>` / `autotrain <text>`."""
+    """Handle `auto [text]` / `autotrain [text]`."""
     text = text.strip()
-    if not text:
-        await message.channel.send("Usage: `auto <text>` — e.g. `auto Daily`")
-        return
-
     user_id = message.author.id
 
     # Cancel any existing task
@@ -169,11 +182,9 @@ async def handle_auto(message: discord.Message, text: str) -> None:
             except Exception:
                 pass
 
-    ends_at = datetime.now(timezone.utc) + TIMER_DURATION
-    end_ts  = int(ends_at.timestamp())
-    timer_msg = await message.channel.send(
-        f"**{text}** Independent training will end in <t:{end_ts}:R>."
-    )
+    ends_at   = datetime.now(timezone.utc) + TIMER_DURATION
+    end_ts    = int(ends_at.timestamp())
+    timer_msg = await message.channel.send(_timer_text(text, end_ts))
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_pending(conn, user_id, text, ends_at, timer_msg.id)
@@ -192,7 +203,7 @@ async def handle_renew(message: discord.Message) -> None:
 
     if existing is None:
         await message.channel.send(
-            "No previous training found. Use `auto <text>` to start one."
+            "No previous training found. Use `auto` to start one."
         )
         return
 
@@ -210,12 +221,10 @@ async def handle_renew(message: discord.Message) -> None:
         except Exception:
             pass
 
-    text    = existing["text"]
-    ends_at = datetime.now(timezone.utc) + TIMER_DURATION
-    end_ts  = int(ends_at.timestamp())
-    timer_msg = await message.channel.send(
-        f"**{text}** Independent training will end in <t:{end_ts}:R>."
-    )
+    text      = existing["text"]
+    ends_at   = datetime.now(timezone.utc) + TIMER_DURATION
+    end_ts    = int(ends_at.timestamp())
+    timer_msg = await message.channel.send(_timer_text(text, end_ts))
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_pending(conn, user_id, text, ends_at, timer_msg.id)
@@ -223,6 +232,46 @@ async def handle_renew(message: discord.Message) -> None:
 
     _schedule(user_id, text, ends_at, timer_msg.id)
     logger.info(f"[AutoTrain] Timer renewed for user {user_id} (text={text!r})")
+
+
+async def handle_end(message: discord.Message) -> None:
+    """Handle `end` — finish the running timer early and deliver completion."""
+    user_id = message.author.id
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        existing = await _get_timer(conn, user_id)
+
+    if existing is None or existing["state"] != "pending":
+        await message.channel.send("No active timer to end.")
+        return
+
+    # Cancel the in-flight task
+    old = _active_tasks.pop(user_id, None)
+    if old and not old.done():
+        old.cancel()
+
+    # Delete the countdown message
+    timer_msg_id = existing["timer_msg_id"]
+    if timer_msg_id:
+        try:
+            old_msg = await message.channel.fetch_message(timer_msg_id)
+            await old_msg.delete()
+        except Exception:
+            pass
+
+    # Send completion message
+    text = existing["text"]
+    try:
+        done_msg = await message.channel.send(_done_text(text))
+    except Exception as exc:
+        logger.error(f"[AutoTrain] Could not send completion to {user_id}: {exc}")
+        return
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_done(conn, user_id, done_msg.id)
+        await conn.commit()
+
+    logger.info(f"[AutoTrain] Timer ended early for user {user_id} (text={text!r})")
 
 
 # ---------------------------------------------------------------------------

@@ -81,11 +81,20 @@ async def on_message(message: discord.Message):
     if cmd_lower.startswith("autotrain "):
         await autotrain_module.handle_auto(message, cmd[len("autotrain "):])
         return
+    if cmd_lower == "autotrain":
+        await autotrain_module.handle_auto(message, "")
+        return
     if cmd_lower.startswith("auto "):
         await autotrain_module.handle_auto(message, cmd[len("auto "):])
         return
+    if cmd_lower == "auto":
+        await autotrain_module.handle_auto(message, "")
+        return
     if cmd_lower == "renew":
         await autotrain_module.handle_renew(message)
+        return
+    if cmd_lower == "end":
+        await autotrain_module.handle_end(message)
         return
 
     # Everything below is owner-only — silently ignore all other users
