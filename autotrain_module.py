@@ -35,7 +35,7 @@ _active_tasks: dict[int, asyncio.Task] = {}
 def _timer_text(text: str, end_ts: int) -> str:
     prefix = f"**{text}** Independent" if text else "Independent"
     return (
-        f"{prefix} training will end in <t:{end_ts}:R>.\n"
+        f"{prefix} training will end in <t:{end_ts}:R>. <:diaread:1529673666370207884>\n"
         "Use `end` to finish early, or `renew` to restart the timer."
     )
 
@@ -45,7 +45,7 @@ def _done_text(text: str) -> str:
     auto_cmd = f"`auto {text}`" if text else "`auto`"
     return (
         f"{subject} Training is complete! I'm excited to see how well that went!\n\n"
-        f"You can use {auto_cmd} to start a new reminder, or `renew` to start another reminder."
+        f"You can use {auto_cmd} to start a new reminder, or `renew` to start another reminder. <a:diapat:1508665594013286400>"
     )
 
 

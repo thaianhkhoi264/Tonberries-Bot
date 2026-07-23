@@ -97,8 +97,11 @@ async def on_message(message: discord.Message):
         await autotrain_module.handle_end(message)
         return
 
-    # Everything below is owner-only — silently ignore all other users
+    # Everything below is owner-only — send a helpful reply to everyone else
     if message.author.id not in OWNER_USER_IDS:
+        await message.channel.send(
+            "Hello! Whatever you're typing is not supported, use `auto` to start an Independent Training reminder. <a:dianod:1508662343322697839>"
+        )
         return
 
     if cmd_lower == "help":
