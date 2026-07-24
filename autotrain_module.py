@@ -41,11 +41,10 @@ def _timer_text(text: str, end_ts: int) -> str:
 
 
 def _done_text(text: str) -> str:
-    subject  = f"Your **{text}** Independent" if text else "Your Independent"
-    auto_cmd = f"`auto {text}`" if text else "`auto`"
+    subject = f"Your **{text}** Independent" if text else "Your Independent"
     return (
         f"{subject} Training is complete! I'm excited to see how well that went!\n\n"
-        f"You can use {auto_cmd} to start a new reminder, or `renew` to start another reminder. <a:diapat:1508665594013286400>"
+        "You can use `auto [text]` to start a new reminder, or `renew` to start another reminder. <a:diapat:1508665594013286400>"
     )
 
 
