@@ -672,14 +672,15 @@ async def send_daily_report(
 
 
 async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
-    """Delete all tracked circle messages if they are out of Discord order.
+    """Clean up and reorder tracked circle messages.
 
-    Message IDs are snowflakes (monotonically increasing with time), so the
-    expected order header < member batches < watchlist < hitlist is verified
-    by checking that IDs are strictly ascending.  If broken, all tracked
-    messages are deleted from Discord and cleared from the DB so the caller
-    can repost them fresh at the bottom of the channel.
+    1. Scans channel history and deletes any bot message that is not tracked in
+       the DB (orphans left by crashes or internet drops).
+    2. If the remaining tracked messages are out of order (IDs not ascending in
+       the expected header → members → watchlist → hitlist sequence), deletes
+       them all and clears the DB so the caller can repost them fresh.
     """
+    # Collect tracked message IDs in expected display order
     order_keys = ["circle_header_msg"]
     for i in range(20):
         mid = await _get(conn, f"circle_members_msg_{i}")
@@ -694,6 +695,21 @@ async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
         if val:
             known.append((key, val))
 
+    tracked_ids = {int(v) for _, v in known}
+
+    # Delete orphaned bot messages (not in tracked set)
+    try:
+        async for msg in channel.history(limit=200):
+            if msg.author.id == bot.user.id and msg.id not in tracked_ids:
+                try:
+                    await msg.delete()
+                    logger.info(f"[Circles] Deleted orphaned bot message {msg.id}")
+                except discord.NotFound:
+                    pass
+    except Exception as exc:
+        logger.warning(f"[Circles] History scan failed: {exc}")
+
+    # Check ordering of tracked messages — delete all if out of sequence
     ids = [int(v) for _, v in known]
     if ids == sorted(ids):
         return  # All in order — nothing to do
