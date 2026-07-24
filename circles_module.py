@@ -671,6 +671,42 @@ async def send_daily_report(
     logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
 
 
+async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
+    """Delete all tracked circle messages if they are out of Discord order.
+
+    Message IDs are snowflakes (monotonically increasing with time), so the
+    expected order header < member batches < watchlist < hitlist is verified
+    by checking that IDs are strictly ascending.  If broken, all tracked
+    messages are deleted from Discord and cleared from the DB so the caller
+    can repost them fresh at the bottom of the channel.
+    """
+    order_keys = ["circle_header_msg"]
+    for i in range(20):
+        mid = await _get(conn, f"circle_members_msg_{i}")
+        if mid is None:
+            break
+        order_keys.append(f"circle_members_msg_{i}")
+    order_keys += ["circle_watchlist_msg", "circle_hitlist_msg"]
+
+    known: list[tuple[str, str]] = []
+    for key in order_keys:
+        val = await _get(conn, key)
+        if val:
+            known.append((key, val))
+
+    ids = [int(v) for _, v in known]
+    if ids == sorted(ids):
+        return  # All in order — nothing to do
+
+    logger.info("[Circles] Messages out of order — deleting all tracked messages for full repost")
+    for key, mid in known:
+        try:
+            await channel.get_partial_message(int(mid)).delete()
+        except discord.NotFound:
+            pass
+        await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
+
+
 async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> bool:
     if not bot.is_ready():
         return
@@ -699,6 +735,8 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         if not force and not is_new_data:
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return False
+
+        await _fix_message_order(channel, conn)
 
         header_id = await _send_or_edit_embed(
             channel, conn, "circle_header_msg", _build_club_embed(api_data)
