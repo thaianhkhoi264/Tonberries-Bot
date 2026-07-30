@@ -43,8 +43,9 @@ DIGIT_EMOJIS = ["1️⃣", "2️⃣", "3️⃣"]
 # Module-level state
 # ---------------------------------------------------------------------------
 
-_timeline: list[dict] = []
-_cache_ts: float      = 0.0
+_timeline: list[dict]        = []
+_banner_card_ids: set[int]   = set()   # union of all pickup_card_ids across all events
+_cache_ts: float             = 0.0
 
 # {message_id: {user_id, cards, banners, channel, expires}}
 _pending: dict[int, dict] = {}
@@ -55,7 +56,7 @@ _pending: dict[int, dict] = {}
 # ---------------------------------------------------------------------------
 
 async def _get_timeline() -> list[dict]:
-    global _timeline, _cache_ts
+    global _timeline, _banner_card_ids, _cache_ts
     if time.time() - _cache_ts < CACHE_TTL and _timeline:
         return _timeline
 
@@ -81,8 +82,14 @@ async def _get_timeline() -> list[dict]:
         data = __import__("json").loads(raw)
         events = data.get("events", []) if isinstance(data, dict) else data
         _timeline = events
+        _banner_card_ids = {
+            int(cid)
+            for ev in events
+            for cid in ev.get("pickup_card_ids", [])
+            if str(cid).lstrip("-").isdigit()
+        }
         _cache_ts = time.time()
-        logger.info(f"[lookup] Cached {len(events)} timeline events")
+        logger.info(f"[lookup] Cached {len(events)} events, {len(_banner_card_ids)} unique banner card IDs")
         return _timeline
     except Exception as exc:
         logger.error(f"[lookup] Failed to fetch timeline: {exc}")
@@ -143,16 +150,18 @@ async def _search_cards(query: str, limit: int = 25) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _parse_date(date_str: str | None) -> float | None:
-    """Parse an ISO date string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS) to Unix timestamp."""
+    """Parse an ISO date string to a UTC Unix timestamp.
+    Handles: YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS, YYYY-MM-DDTHH:MM:SSZ, +00:00 suffix.
+    """
     if not date_str:
         return None
     try:
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
-            try:
-                dt = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
-                return dt.timestamp()
-            except ValueError:
-                continue
+        # Normalise: replace trailing Z with +00:00 so fromisoformat handles it
+        normalised = date_str.strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalised)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
     except Exception:
         pass
     return None
@@ -301,10 +310,17 @@ async def autocomplete_whenis(
 ) -> list[app_commands.Choice[str]]:
     if not current:
         return []
-    results = await _search_cards(current, limit=25)
+    # Ensure timeline is cached so _banner_card_ids is populated
+    await _get_timeline()
+    results = await _search_cards(current, limit=100)
+    # Only surface cards that actually appear in at least one banner
+    filtered = [
+        r for r in results
+        if int(r["card_id"]) in _banner_card_ids
+    ]
     return [
         app_commands.Choice(name=r["name"], value=r["name"])
-        for r in results
+        for r in filtered[:25]
     ]
 
 
