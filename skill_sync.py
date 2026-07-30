@@ -20,6 +20,7 @@ import discord
 from global_config import (
     SKILL_DATA_JSON,
     COURSE_DATA_JSON,
+    COURSE_LABELS_JSON,
     TRACK_NAMES_JSON,
     SKILL_NAMES_JSON,
 )
@@ -45,6 +46,10 @@ _REMOTE_FILES = [
     (
         "https://raw.githubusercontent.com/alpha123/uma-tools/master/umalator-global/skillnames.json",
         SKILL_NAMES_JSON,
+    ),
+    (
+        "https://raw.githubusercontent.com/alpha123/uma-tools/master/umalator-global/course_data.json",
+        COURSE_LABELS_JSON,
     ),
 ]
 

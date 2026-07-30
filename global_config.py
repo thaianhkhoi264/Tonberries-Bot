@@ -34,7 +34,8 @@ SKILLS_DB = "data/skills.db"  # written by skills_scraper.py
 
 # uma-skill-tools / uma-tools cached JSON files (written by skill_sync.py)
 UMA_TOOLS_DIR    = "data/uma_tools"
-SKILL_DATA_JSON  = f"{UMA_TOOLS_DIR}/skill_data.json"
-COURSE_DATA_JSON = f"{UMA_TOOLS_DIR}/course_data.json"
-TRACK_NAMES_JSON = f"{UMA_TOOLS_DIR}/tracknames.json"
-SKILL_NAMES_JSON = f"{UMA_TOOLS_DIR}/skillnames.json"
+SKILL_DATA_JSON    = f"{UMA_TOOLS_DIR}/skill_data.json"
+COURSE_DATA_JSON   = f"{UMA_TOOLS_DIR}/course_data.json"    # uma-skill-tools (geometry)
+COURSE_LABELS_JSON = f"{UMA_TOOLS_DIR}/course_labels.json"  # uma-tools (inner/outer labels)
+TRACK_NAMES_JSON   = f"{UMA_TOOLS_DIR}/tracknames.json"
+SKILL_NAMES_JSON   = f"{UMA_TOOLS_DIR}/skillnames.json"
