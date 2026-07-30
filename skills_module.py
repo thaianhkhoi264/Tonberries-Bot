@@ -309,17 +309,14 @@ async def handle_skill_interaction(
     course: str | None = None,
     length: str | None = None,
 ) -> None:
-    """
-    Slash command entry point (/skill).
-    Responds ephemerally with a skill chart and condition summary.
-    """
-    await interaction.response.defer(ephemeral=True)
+    """Slash command entry point (/skill). Responds publicly with a skill chart."""
+    await interaction.response.defer()
     load_uma_data()
     cm_module.load_local_data_if_needed()
 
     name = name.strip()
     if not name:
-        await interaction.followup.send("Please provide a skill name.", ephemeral=True)
+        await interaction.followup.send("Please provide a skill name.")
         return
 
     # --- Find skill in uma-skill-tools data ---
@@ -330,31 +327,28 @@ async def handle_skill_interaction(
         if not os.path.exists(SKILLS_DB):
             await interaction.followup.send(
                 f"No skill found for **{name}**.\n"
-                "Skills database not synced yet \u2014 try `skill sync` first.",
-                ephemeral=True,
+                "Skills database not synced yet \u2014 try `skill sync` first."
             )
             return
         rows = await _search_skills(name, limit=MAX_RESULTS_LIST + 1)
         if not rows:
-            await interaction.followup.send(f"No skill found matching **{name}**.", ephemeral=True)
+            await interaction.followup.send(f"No skill found matching **{name}**.")
             return
         if len(rows) > MAX_RESULTS_LIST:
             await interaction.followup.send(
                 f"Found more than {MAX_RESULTS_LIST} skills matching **{name}** \u2014 "
-                "please be more specific.",
-                ephemeral=True,
+                "please be more specific."
             )
             return
         if len(rows) > 1:
             lines = [f"{i+1}. {r['name']}" for i, r in enumerate(rows)]
             await interaction.followup.send(
                 f"Multiple skills match **{name}**:\n" + "\n".join(lines)
-                + "\n\nUse the full name to get details.",
-                ephemeral=True,
+                + "\n\nUse the full name to get details."
             )
             return
         embed = _build_gametora_embed(rows[0])
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed)
         return
 
     skill_id, entry = result
@@ -400,9 +394,9 @@ async def handle_skill_interaction(
 
     if chart_bytes:
         file = discord.File(io.BytesIO(chart_bytes), filename="skill_chart.png")
-        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+        await interaction.followup.send(embed=embed, file=file)
     else:
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed)
 
 
 # ---------------------------------------------------------------------------
