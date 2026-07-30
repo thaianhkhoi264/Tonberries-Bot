@@ -31,7 +31,7 @@ logger = logging.getLogger("lookup_module")
 
 UMA_TIMELINE_URL  = "https://uma.moe/resources/current/banner_timeline.json.gz"
 SUPPORT_IMG_URL   = "https://media.gametora.com/umamusume/supports/full/small/{}.png"
-CHARACTER_IMG_URL = "https://media.gametora.com/umamusume/characters/full/small/{}.png"
+CHARACTER_IMG_URL = "https://gametora.com/images/umamusume/characters/chara_stand_{prefix}_{id}.png"  # constructed in _card_image_url
 GAMETORA_BASE     = "https://gametora.com"
 
 CACHE_TTL    = 3600   # seconds
@@ -181,7 +181,9 @@ def _find_banners(card_id_int: int, timeline: list[dict]) -> list[dict]:
         ids = [int(x) for x in ev.get("pickup_card_ids", []) if str(x).isdigit()]
         if card_id_int not in ids:
             continue
-        start_ts = _parse_date(ev.get("jp_release_date") or ev.get("start_date"))
+        start_ts = _parse_date(
+            ev.get("global_release_date") or ev.get("jp_release_date") or ev.get("start_date")
+        )
         end_ts   = _parse_date(ev.get("estimated_end_date") or ev.get("end_date"))
         entry = {
             "start_ts":    start_ts,
@@ -203,9 +205,12 @@ def _find_banners(card_id_int: int, timeline: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _card_image_url(card: dict) -> str:
+    cid = card["card_id"]
     if card["kind"] == "support":
-        return SUPPORT_IMG_URL.format(card["card_id"])
-    return CHARACTER_IMG_URL.format(card["card_id"])
+        return SUPPORT_IMG_URL.format(cid)
+    # Character: chara_stand_{first4 digits of ID}_{full ID}.png
+    prefix = str(cid)[:4]
+    return f"https://gametora.com/images/umamusume/characters/chara_stand_{prefix}_{cid}.png"
 
 
 def _build_result_embed(card: dict, banner: dict | None) -> discord.Embed:
@@ -231,7 +236,7 @@ def _build_result_embed(card: dict, banner: dict | None) -> discord.Embed:
         title=card["name"],
         url=gt_url or None,
         description=desc,
-        colour=discord.Colour.gold(),
+        colour=discord.Colour.green(),
     )
     embed.set_image(url=_card_image_url(card))
     embed.set_footer(text=f"ID: {card['card_id']}")
