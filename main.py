@@ -35,14 +35,14 @@ async def _slash_skill_autocomplete(
 
 
 @bot.tree.command(name="whenis", description="Look up when a support card or character will appear on a banner")
-@app_commands.describe(card="Support card or character name (e.g. 'Eishin Flash', 'Silence Suzuka (SSR Speed)')")
+@app_commands.describe(name="Character or support card name")
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-async def _slash_whenis(interaction: discord.Interaction, card: str):
-    await lookup_module.handle_whenis(interaction, card)
+async def _slash_whenis(interaction: discord.Interaction, name: str):
+    await lookup_module.handle_whenis(interaction, name)
 
 
-@_slash_whenis.autocomplete("card")
+@_slash_whenis.autocomplete("name")
 async def _slash_whenis_autocomplete(
     interaction: discord.Interaction,
     current: str,
