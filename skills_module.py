@@ -1,9 +1,16 @@
 """
 skills_module.py
 
-Discord skill lookup from the locally cached skills.db (populated by skills_scraper.py).
+Discord skill lookup.  Combines:
+  - uma-skill-tools data (skill_data.json / skillnames.json) for chart generation
+  - GameTora-scraped skills.db for in-game descriptions and icon thumbnails
 """
 
+from __future__ import annotations
+
+import asyncio
+import io
+import json
 import logging
 import os
 
@@ -11,84 +18,137 @@ import aiosqlite
 import discord
 from discord import app_commands
 
-from global_config import SKILLS_DB
+import cm_module
+from global_config import (
+    SKILL_DATA_JSON,
+    SKILL_NAMES_JSON,
+    SKILLS_DB,
+)
+from skill_chart import build_skill_chart, format_effects, _format_cond_block
 
 logger = logging.getLogger("skills_module")
 
-# Maximum number of search results to list before asking for a narrower query
 MAX_RESULTS_LIST = 8
+
+# Rarity → embed colour (matches uma-skill-tools rarity field 1-5)
+_RARITY_COLOUR = {
+    1: 0x99aab5,  # grey   — Normal
+    2: 0x3498db,  # blue   — Rare
+    3: 0x2ecc71,  # green  — SR
+    4: 0xf1c40f,  # gold   — SSR
+    5: 0xe91e63,  # pink   — Unique
+}
+
+# ---------------------------------------------------------------------------
+# uma-skill-tools data (loaded once from disk)
+# ---------------------------------------------------------------------------
+_skill_data:  dict = {}   # skill_id_str → {alternatives, rarity, ...}
+_skill_names: dict = {}   # skill_id_str → name (str or [str, ...])
+
+_uma_loaded = False
+
+
+def load_uma_data() -> None:
+    """Load skill_data.json and skillnames.json into memory. No-op after first call."""
+    global _uma_loaded, _skill_data, _skill_names
+    if _uma_loaded:
+        return
+    if os.path.exists(SKILL_DATA_JSON):
+        with open(SKILL_DATA_JSON, encoding="utf-8") as f:
+            _skill_data = json.load(f)
+    if os.path.exists(SKILL_NAMES_JSON):
+        with open(SKILL_NAMES_JSON, encoding="utf-8") as f:
+            _skill_names = json.load(f)
+    _uma_loaded = True
+    logger.info(f"[Skills] Loaded {len(_skill_data)} skills, {len(_skill_names)} names")
+
+
+def _en_name(skill_id: str) -> str:
+    raw = _skill_names.get(skill_id, "")
+    return (raw[0] if isinstance(raw, list) else str(raw)) or f"Skill {skill_id}"
+
+
+def _find_skill_by_name(name: str) -> tuple[str, dict] | None:
+    """
+    Search _skill_names for an exact case-insensitive match.
+    Returns (skill_id_str, skill_data_entry) or None.
+    """
+    name_lower = name.lower()
+    for sid, raw in _skill_names.items():
+        en = (raw[0] if isinstance(raw, list) else str(raw))
+        if en.lower() == name_lower:
+            entry = _skill_data.get(sid)
+            if entry is not None:
+                return sid, entry
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Database helpers
+# GameTora skills.db helpers (descriptions + icons)
 # ---------------------------------------------------------------------------
 
 async def _search_skills(query: str, limit: int = MAX_RESULTS_LIST + 1) -> list[dict]:
-    """Return skills whose name contains *query* (case-insensitive)."""
+    """Return skills from skills.db whose name contains *query*."""
     if not os.path.exists(SKILLS_DB):
         return []
-    rows = []
     async with aiosqlite.connect(SKILLS_DB) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM skills WHERE name LIKE ? ORDER BY name LIMIT ?",
             (f"%{query}%", limit),
         ) as cur:
-            rows = [dict(r) for r in await cur.fetchall()]
-    return rows
+            return [dict(r) for r in await cur.fetchall()]
 
 
-async def _get_skill_by_id(skill_id: int) -> dict | None:
+async def _get_gametora_by_id(skill_id: str) -> dict | None:
+    """Look up skills.db by numeric skill_id (same ID system as uma-skill-tools)."""
     if not os.path.exists(SKILLS_DB):
         return None
-    async with aiosqlite.connect(SKILLS_DB) as conn:
-        conn.row_factory = aiosqlite.Row
-        async with conn.execute(
-            "SELECT * FROM skills WHERE skill_id = ?", (skill_id,)
-        ) as cur:
-            row = await cur.fetchone()
-    return dict(row) if row else None
+    try:
+        async with aiosqlite.connect(SKILLS_DB) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute(
+                "SELECT * FROM skills WHERE skill_id = ?", (int(skill_id),)
+            ) as cur:
+                row = await cur.fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
-# Formatting helpers
+# Formatting helpers (GameTora path, kept for DM-command fallback)
 # ---------------------------------------------------------------------------
 
 def _fmt_conditions(cond: str | None) -> str:
-    """Join multiline conditions into a compact inline string."""
     if not cond:
-        return "—"
-    # Each line may start with '&' (continuation marker) – strip it for readability
+        return "\u2014"
     parts = [l.lstrip("&").strip() for l in cond.splitlines() if l.strip()]
-    return " · ".join(parts)
+    return " \u00b7 ".join(parts)
 
 
 def _rarity_stars(rarity: str | None) -> str:
-    """Map 'Unique (⭐⭐⭐)' → '⭐⭐⭐ Unique', 'Normal' → 'Normal', etc."""
     if not rarity:
         return ""
-    # Rarity strings from GameTora look like "Unique (⭐⭐⭐)" or just "Normal"
     if "(" in rarity:
         label, stars = rarity.split("(", 1)
         return f"{stars.rstrip(')')} {label.strip()}"
     return rarity
 
 
-def _build_skill_embed(skill: dict) -> discord.Embed:
-    """Build a Discord embed for a single skill."""
-    name = skill.get("name") or "Unknown"
-    rarity = _rarity_stars(skill.get("rarity"))
+def _build_gametora_embed(skill: dict) -> discord.Embed:
+    """Legacy embed built entirely from skills.db (GameTora) data."""
+    name        = skill.get("name") or "Unknown"
+    rarity      = _rarity_stars(skill.get("rarity"))
     description = skill.get("description") or ""
     description_detailed = skill.get("description_detailed") or ""
-    character = skill.get("character_name") or ""
-    activation = skill.get("activation") or ""
+    character   = skill.get("character_name") or ""
+    activation  = skill.get("activation") or ""
     base_duration = skill.get("base_duration") or ""
-    base_cost = skill.get("base_cost") or ""
-    effect = skill.get("effect") or ""
-    conditions = _fmt_conditions(skill.get("conditions"))
-    icon_url = skill.get("icon_url") or ""
-
-    # Inherited fields
+    base_cost   = skill.get("base_cost") or ""
+    effect      = skill.get("effect") or ""
+    conditions  = _fmt_conditions(skill.get("conditions"))
+    icon_url    = skill.get("icon_url") or ""
     inh_activation = skill.get("inherited_activation") or ""
     inh_duration   = skill.get("inherited_duration") or ""
     inh_cost       = skill.get("inherited_base_cost") or ""
@@ -101,89 +161,275 @@ def _build_skill_embed(skill: dict) -> discord.Embed:
         colour=discord.Colour.gold() if "Unique" in (skill.get("rarity") or "")
                else discord.Colour.greyple(),
     )
-
     if icon_url:
         embed.set_thumbnail(url=icon_url)
-
-    # Rarity / source character
     meta_parts = [rarity] if rarity else []
     if character:
         meta_parts.append(f"From: {character}")
     if meta_parts:
-        embed.add_field(name="Info", value=" · ".join(meta_parts), inline=False)
-
-    # Detailed description (if different from short one)
+        embed.add_field(name="Info", value=" \u00b7 ".join(meta_parts), inline=False)
     if description_detailed and description_detailed.rstrip(".") != description.rstrip("."):
         embed.add_field(name="Detail", value=description_detailed, inline=False)
-
-    # Main version stats
     effect_line = effect
     if base_duration:
-        effect_line += f" · {base_duration}"
+        effect_line += f" \u00b7 {base_duration}"
     if activation:
-        effect_line += f" · {activation}"
+        effect_line += f" \u00b7 {activation}"
     if base_cost:
-        effect_line += f" · cost {base_cost}"
+        effect_line += f" \u00b7 cost {base_cost}"
     if effect_line:
         embed.add_field(name="Effect", value=effect_line, inline=False)
-
     embed.add_field(name="Conditions", value=f"`{conditions}`", inline=False)
-
-    # Inherited version
     if inh_effect:
         inh_line = inh_effect
         if inh_duration:
-            inh_line += f" · {inh_duration}"
+            inh_line += f" \u00b7 {inh_duration}"
         if inh_activation:
-            inh_line += f" · {inh_activation}"
+            inh_line += f" \u00b7 {inh_activation}"
         if inh_cost:
-            inh_line += f" · cost {inh_cost}"
+            inh_line += f" \u00b7 cost {inh_cost}"
         embed.add_field(name="When inherited", value=inh_line, inline=False)
         if inh_conditions and inh_conditions != conditions:
-            embed.add_field(
-                name="Inherited conditions", value=f"`{inh_conditions}`", inline=False
-            )
-
+            embed.add_field(name="Inherited conditions", value=f"`{inh_conditions}`", inline=False)
     skill_id = skill.get("skill_id")
     if skill_id:
         embed.set_footer(text=f"ID: {skill_id}")
+    return embed
+
+
+# ---------------------------------------------------------------------------
+# Chart-based embed builder
+# ---------------------------------------------------------------------------
+
+def _build_chart_embed(
+    skill_id: str,
+    en_name: str,
+    entry: dict,
+    gt: dict | None,
+    course_id: int | None,
+    course_display: str,
+) -> discord.Embed:
+    """Build a rich embed with condition blocks, effect summary, and optional chart."""
+    alts   = entry.get("alternatives", [])
+    alt    = alts[0] if alts else {}
+    cond   = alt.get("condition", "")
+    precond = alt.get("precondition", "")
+    bdur   = int(alt.get("baseDuration", 0))
+    rarity = entry.get("rarity", 0)
+    efx    = format_effects(alt.get("effects", []))
+    dur_s  = bdur / 10000.0
+
+    cond_block   = _format_cond_block(cond)
+    precond_block = _format_cond_block(precond) if precond else ""
+
+    desc_parts: list[str] = []
+
+    # In-game description from GameTora (if available)
+    if gt and gt.get("description"):
+        desc_parts.append(gt["description"])
+    if gt and gt.get("description_detailed"):
+        desc_parts.append(f"*{gt['description_detailed']}*")
+    if desc_parts:
+        desc_parts.append("")   # blank separator
+
+    # Condition blocks
+    if precond_block:
+        desc_parts.append(f"**Pre-condition:**\n{precond_block}")
+        desc_parts.append(f"**Activation:**\n{cond_block}")
+    elif cond_block:
+        desc_parts.append(f"**Condition:**\n{cond_block}")
+
+    # Effect + duration
+    desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
+    if len(alts) > 1:
+        desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #1)*")
+
+    # External links (only when a course is resolved so visualizer link is meaningful)
+    if course_id:
+        viz_url = (
+            f"https://alpha123.github.io/uma-tools/skill-visualizer-global/"
+            f"#cid={course_id},sid={skill_id}"
+        )
+        gt_url = f"https://gametora.com/umamusume/skill-condition-viewer?skill={skill_id}"
+        desc_parts.append(f"\n[Skill visualizer]({viz_url})  \u00b7  [Condition viewer]({gt_url})")
+
+    description = "\n".join(desc_parts)
+    # Discord embed description cap is 4096 chars
+    if len(description) > 4096:
+        description = description[:4090] + "\u2026"
+
+    embed = discord.Embed(
+        title=en_name,
+        description=description or None,
+        colour=_RARITY_COLOUR.get(rarity, 0x99aab5),
+    )
+    if gt and gt.get("icon_url"):
+        embed.set_thumbnail(url=gt["icon_url"])
+    if course_id:
+        embed.set_image(url="attachment://skill_chart.png")
+    if course_display:
+        embed.set_footer(text=course_display)
 
     return embed
 
 
 # ---------------------------------------------------------------------------
-# Public command handler
+# Public slash command handlers
+# ---------------------------------------------------------------------------
+
+async def autocomplete_skills(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete for the `name` parameter of /skill."""
+    load_uma_data()
+    cur = current.lower()
+
+    choices: list[app_commands.Choice[str]] = []
+
+    if _skill_names and cur:
+        for sid, raw in _skill_names.items():
+            en = (raw[0] if isinstance(raw, list) else str(raw))
+            if cur in en.lower():
+                choices.append(app_commands.Choice(name=en, value=en))
+                if len(choices) >= 25:
+                    break
+
+    # Fallback to skills.db when uma data not yet synced or no matches
+    if not choices and os.path.exists(SKILLS_DB):
+        rows = await _search_skills(current, limit=25)
+        choices = [app_commands.Choice(name=r["name"], value=r["name"]) for r in rows]
+
+    return choices[:25]
+
+
+async def handle_skill_interaction(
+    interaction: discord.Interaction,
+    name: str,
+    course: str | None = None,
+    length: str | None = None,
+) -> None:
+    """
+    Slash command entry point (/skill).
+    Responds ephemerally with a skill chart and condition summary.
+    """
+    await interaction.response.defer(ephemeral=True)
+    load_uma_data()
+    cm_module.load_local_data_if_needed()
+
+    name = name.strip()
+    if not name:
+        await interaction.followup.send("Please provide a skill name.", ephemeral=True)
+        return
+
+    # --- Find skill in uma-skill-tools data ---
+    result = _find_skill_by_name(name)
+
+    if result is None:
+        # Fall back: uma data missing or skill not found — try skills.db only
+        if not os.path.exists(SKILLS_DB):
+            await interaction.followup.send(
+                f"No skill found for **{name}**.\n"
+                "Skills database not synced yet \u2014 try `skill sync` first.",
+                ephemeral=True,
+            )
+            return
+        rows = await _search_skills(name, limit=MAX_RESULTS_LIST + 1)
+        if not rows:
+            await interaction.followup.send(f"No skill found matching **{name}**.", ephemeral=True)
+            return
+        if len(rows) > MAX_RESULTS_LIST:
+            await interaction.followup.send(
+                f"Found more than {MAX_RESULTS_LIST} skills matching **{name}** \u2014 "
+                "please be more specific.",
+                ephemeral=True,
+            )
+            return
+        if len(rows) > 1:
+            lines = [f"{i+1}. {r['name']}" for i, r in enumerate(rows)]
+            await interaction.followup.send(
+                f"Multiple skills match **{name}**:\n" + "\n".join(lines)
+                + "\n\nUse the full name to get details.",
+                ephemeral=True,
+            )
+            return
+        embed = _build_gametora_embed(rows[0])
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return
+
+    skill_id, entry = result
+    en_name = _en_name(skill_id)
+
+    # --- Look up description / icon from GameTora DB (optional enrichment) ---
+    gt = await _get_gametora_by_id(skill_id)
+
+    # --- Resolve course ---
+    # Pre-fetch CM events so resolve_course can work synchronously
+    await cm_module.fetch_cm_events()
+
+    # Default: use active CM, then next CM, if user didn't specify
+    if not course:
+        cm = cm_module.get_active_cm() or cm_module.get_next_cm()
+        if cm:
+            course = f"cm:{cm['number']}"
+
+    course_id, course_display = cm_module.resolve_course(course or "", length)
+
+    # --- Generate chart (CPU-bound; run in thread pool) ---
+    chart_bytes: bytes | None = None
+    if course_id is not None:
+        course_entry = cm_module.get_course_entry(course_id)
+        if course_entry:
+            alts   = entry.get("alternatives", [])
+            alt    = alts[0] if alts else {}
+            cond   = alt.get("condition", "")
+            precond = alt.get("precondition", "")
+            bdur   = int(alt.get("baseDuration", 0))
+            loop = asyncio.get_event_loop()
+            try:
+                chart_bytes = await loop.run_in_executor(
+                    None,
+                    build_skill_chart,
+                    cond, precond, bdur, course_entry, course_display,
+                )
+            except Exception as exc:
+                logger.error(f"[Skills] Chart generation failed for {skill_id}: {exc}")
+
+    # --- Build and send embed ---
+    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display)
+
+    if chart_bytes:
+        file = discord.File(io.BytesIO(chart_bytes), filename="skill_chart.png")
+        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+    else:
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+# ---------------------------------------------------------------------------
+# DM command handler (text-based; kept for owner DM use)
 # ---------------------------------------------------------------------------
 
 async def handle_skill_lookup(message: discord.Message, query: str) -> None:
-    """
-    Entry point called from main.py.
-    Searches for *query* in skills.db and responds with an embed (or error).
-    """
+    """Entry point called from main.py for DM `skill <name>` command."""
     query = query.strip()
     if not query:
-        await message.channel.send("Usage: `skill <name>` — e.g. `skill Red Shift`")
+        await message.channel.send("Usage: `skill <name>` \u2014 e.g. `skill Red Shift`")
         return
 
     if not os.path.exists(SKILLS_DB):
-        await message.channel.send(
-            "Skills database not found. Run `skill refresh` first."
-        )
+        await message.channel.send("Skills database not found. Run `skill refresh` first.")
         return
 
     results = await _search_skills(query)
-
     if not results:
         await message.channel.send(f"No skill found matching **{query}**.")
         return
-
     if len(results) > MAX_RESULTS_LIST:
         await message.channel.send(
-            f"Found more than {MAX_RESULTS_LIST} skills matching **{query}** — "
+            f"Found more than {MAX_RESULTS_LIST} skills matching **{query}** \u2014 "
             "please be more specific."
         )
         return
-
     if len(results) > 1:
         lines = [f"{i+1}. {r['name']}" for i, r in enumerate(results)]
         await message.channel.send(
@@ -192,76 +438,5 @@ async def handle_skill_lookup(message: discord.Message, query: str) -> None:
         )
         return
 
-    skill = results[0]
-    embed = _build_skill_embed(skill)
+    embed = _build_gametora_embed(results[0])
     await message.channel.send(embed=embed)
-
-
-# ---------------------------------------------------------------------------
-# Slash command handlers (interaction-based)
-# ---------------------------------------------------------------------------
-
-async def autocomplete_skills(
-    interaction: discord.Interaction,
-    current: str,
-) -> list[app_commands.Choice[str]]:
-    """Autocomplete handler for the /skill slash command."""
-    if not current or not os.path.exists(SKILLS_DB):
-        return []
-    results = await _search_skills(current, limit=25)
-    return [
-        app_commands.Choice(name=r["name"], value=r["name"])
-        for r in results
-    ]
-
-
-async def handle_skill_interaction(
-    interaction: discord.Interaction, query: str
-) -> None:
-    """
-    Slash command entry point — responds ephemerally so only the invoking
-    user sees the result.
-    """
-    await interaction.response.defer(ephemeral=True)
-
-    query = query.strip()
-    if not query:
-        await interaction.followup.send(
-            "Please provide a skill name.", ephemeral=True
-        )
-        return
-
-    if not os.path.exists(SKILLS_DB):
-        await interaction.followup.send(
-            "Skills database not found. Ask an admin to run `skill refresh`.",
-            ephemeral=True,
-        )
-        return
-
-    results = await _search_skills(query)
-
-    if not results:
-        await interaction.followup.send(
-            f"No skill found matching **{query}**.", ephemeral=True
-        )
-        return
-
-    if len(results) > MAX_RESULTS_LIST:
-        await interaction.followup.send(
-            f"Found more than {MAX_RESULTS_LIST} skills matching **{query}** — "
-            "please be more specific.",
-            ephemeral=True,
-        )
-        return
-
-    if len(results) > 1:
-        lines = [f"{i+1}. {r['name']}" for i, r in enumerate(results)]
-        await interaction.followup.send(
-            f"Multiple skills match **{query}**:\n" + "\n".join(lines)
-            + "\n\nUse the full name to get details.",
-            ephemeral=True,
-        )
-        return
-
-    embed = _build_skill_embed(results[0])
-    await interaction.followup.send(embed=embed, ephemeral=True)

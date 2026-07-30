@@ -13,6 +13,7 @@ import skills_module
 import autotrain_module
 import lookup_module
 import skill_sync
+import cm_module
 
 
 # ---------------------------------------------------------------------------
@@ -20,11 +21,20 @@ import skill_sync
 # ---------------------------------------------------------------------------
 
 @bot.tree.command(name="skill", description="Look up an Uma Musume skill")
-@app_commands.describe(name="Skill name to search for")
+@app_commands.describe(
+    name="Skill name to search for",
+    course="CM or racecourse to visualise on (defaults to current/next CM)",
+    length="Course variant / distance (only for venue selections)",
+)
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-async def _slash_skill(interaction: discord.Interaction, name: str):
-    await skills_module.handle_skill_interaction(interaction, name)
+async def _slash_skill(
+    interaction: discord.Interaction,
+    name: str,
+    course: str | None = None,
+    length: str | None = None,
+):
+    await skills_module.handle_skill_interaction(interaction, name, course, length)
 
 
 @_slash_skill.autocomplete("name")
@@ -33,6 +43,23 @@ async def _slash_skill_autocomplete(
     current: str,
 ) -> list[app_commands.Choice[str]]:
     return await skills_module.autocomplete_skills(interaction, current)
+
+
+@_slash_skill.autocomplete("course")
+async def _slash_skill_course_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await cm_module.autocomplete_course(interaction, current)
+
+
+@_slash_skill.autocomplete("length")
+async def _slash_skill_length_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    course_value = interaction.namespace.course or ""
+    return await cm_module.autocomplete_length(interaction, current, course_value)
 
 
 @bot.tree.command(name="whenis", description="Look up when a support card or character will appear on a banner")
@@ -72,6 +99,8 @@ async def on_ready():
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")
     await skill_sync.sync_if_stale(bot)
+    cm_module.load_local_data_if_needed()
+    skills_module.load_uma_data()
     await _send_restart_dm()
 
 
