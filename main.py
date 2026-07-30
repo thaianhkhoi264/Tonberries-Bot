@@ -12,6 +12,7 @@ import circles_module
 import skills_module
 import autotrain_module
 import lookup_module
+import skill_sync
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +71,7 @@ async def on_ready():
     await autotrain_module.restore_timers()
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")
+    await skill_sync.sync_if_stale(bot)
     await _send_restart_dm()
 
 
@@ -144,6 +146,8 @@ async def on_message(message: discord.Message):
         await _cmd_report(message)
     elif cmd_lower in ("shaming on", "shaming off"):
         await _cmd_shaming(message, cmd_lower == "shaming on")
+    elif cmd_lower == "skill sync":
+        await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
         await _cmd_skill_refresh(message)
     elif cmd_lower.startswith("skill "):
@@ -165,6 +169,7 @@ async def _cmd_help(message: discord.Message):
         "`report` — Force-send the daily fan report to you\n"
         "`shaming on/off` — Toggle posting the daily report to uma-chat-v2\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
+        "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
         "`shutdown` — Stop Dia in case she spammed..."
@@ -250,6 +255,16 @@ async def _cmd_skill_refresh(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Skills scraper error: {exc}")
         await message.channel.send(f"Skills scraper error: {exc}")
+
+
+async def _cmd_skill_sync(message: discord.Message):
+    await message.channel.send("Syncing uma-skill-tools data from GitHub…")
+    try:
+        result = await skill_sync.sync_now(bot)
+        await message.channel.send(result)
+    except Exception as exc:
+        logger.error(f"[Bot] Skill sync failed: {exc}")
+        await message.channel.send(f"Skill sync failed: {exc}")
 
 
 async def _cmd_restart(message: discord.Message):
