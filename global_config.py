@@ -17,6 +17,7 @@ GACHA_BOT_DIR = "/home/piberry/Gacha-Timer-Bot"
 # Read-only access to Gacha-Timer-Bot's databases
 SHARED_EVENTS_DB      = f"{GACHA_BOT_DIR}/data/uma_musume_data.db"
 SHARED_NOTIF_DB       = f"{GACHA_BOT_DIR}/data/notification_data.db"
+SHARED_GAMETORA_DB    = f"{GACHA_BOT_DIR}/data/JP_Data/uma_jp_data.db"  # support_cards + characters
 # File written by Gacha-Timer-Bot's scraper; used as a refresh signal
 SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 
