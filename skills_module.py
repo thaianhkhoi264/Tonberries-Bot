@@ -293,7 +293,8 @@ async def autocomplete_skills(
                 continue
             en = (raw[0] if isinstance(raw, list) else str(raw))
             if cur in en.lower():
-                choices.append(app_commands.Choice(name=en, value=en))
+                display = f"{en} (Inherited)" if sid.startswith("9") else en
+                choices.append(app_commands.Choice(name=display, value=sid))
                 if len(choices) >= 25:
                     break
 
@@ -322,7 +323,14 @@ async def handle_skill_interaction(
         return
 
     # --- Find skill in uma-skill-tools data ---
-    result = _find_skill_by_name(name)
+    # Autocomplete delivers skill_id as value; manual typing delivers a name.
+    result = None
+    if name.isdigit():
+        entry = _skill_data.get(name)
+        if entry:
+            result = (name, entry)
+    if result is None:
+        result = _find_skill_by_name(name)
 
     if result is None:
         # Fall back: uma data missing or skill not found — try skills.db only
@@ -354,10 +362,17 @@ async def handle_skill_interaction(
         return
 
     skill_id, entry = result
+    is_inherited = skill_id.startswith("9")
     en_name = _en_name(skill_id)
+    if is_inherited:
+        en_name = f"{en_name} (Inherited)"
 
     # --- Look up description / icon from GameTora DB (optional enrichment) ---
     gt = await _get_gametora_by_id(skill_id)
+    # Inherited skills (9XXXXX) don't have their own GT row; fall back to the
+    # corresponding unique version (1XXXXX) just to get the icon.
+    if gt is None and is_inherited:
+        gt = await _get_gametora_by_id("1" + skill_id[1:])
 
     # --- Resolve course ---
     # Pre-fetch CM events so resolve_course can work synchronously
