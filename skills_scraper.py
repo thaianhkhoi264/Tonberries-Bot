@@ -270,7 +270,7 @@ async def scrape() -> int:
                             wi = popup_content.locator("text=When inherited").first
                             if await wi.is_visible():
                                 await wi.click()
-                                await page.wait_for_timeout(500)
+                                await page.wait_for_timeout(1200)
                                 popup_text = await popup_content.first.inner_text()
                                 inherited = _parse_inherited_text(popup_text)
                                 data.update(inherited)

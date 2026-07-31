@@ -289,6 +289,8 @@ async def autocomplete_skills(
 
     if _skill_names and cur:
         for sid, raw in _skill_names.items():
+            if sid not in _skill_data:   # skip phantom entries not in sim data
+                continue
             en = (raw[0] if isinstance(raw, list) else str(raw))
             if cur in en.lower():
                 choices.append(app_commands.Choice(name=en, value=en))
