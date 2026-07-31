@@ -24,7 +24,7 @@ from global_config import (
     SKILL_NAMES_JSON,
     SKILLS_DB,
 )
-from skill_chart import build_skill_chart, format_effects, _format_cond_block
+from skill_chart import build_skill_chart, format_effects, _format_cond_block, evaluate_trigger
 
 logger = logging.getLogger("skills_module")
 
@@ -208,6 +208,7 @@ def _build_chart_embed(
     gt: dict | None,
     course_id: int | None,
     course_display: str,
+    all_same_geo: bool = False,
 ) -> discord.Embed:
     """Build a rich embed with condition blocks, effect summary, and optional chart."""
     alts   = entry.get("alternatives", [])
@@ -240,9 +241,17 @@ def _build_chart_embed(
         desc_parts.append(f"**Condition:**\n{cond_block}")
 
     # Effect + duration
-    desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
-    if len(alts) > 1:
-        desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #1)*")
+    if all_same_geo and len(alts) > 1:
+        effect_lines = []
+        for i, a in enumerate(alts, 1):
+            e = format_effects(a.get("effects", []))
+            d = int(a.get("baseDuration", 0)) / 10000.0
+            effect_lines.append(f"Alt {i}: {e}  |  {d:.1f}s")
+        desc_parts.append("\n**Effects:**\n" + "\n".join(effect_lines))
+    else:
+        desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
+        if len(alts) > 1:
+            desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #1)*")
 
     # External links (only when a course is resolved so visualizer link is meaningful)
     if course_id:
@@ -406,8 +415,19 @@ async def handle_skill_interaction(
             except Exception as exc:
                 logger.error(f"[Skills] Chart generation failed for {skill_id}: {exc}")
 
+            # Show all alternative effects when they share the same geo trigger window
+            ranges0 = evaluate_trigger(cond, precond, course_entry)
+            all_same_geo = len(alts) > 1 and all(
+                evaluate_trigger(a.get("condition", ""), a.get("precondition", ""), course_entry) == ranges0
+                for a in alts[1:]
+            )
+        else:
+            all_same_geo = False
+    else:
+        all_same_geo = False
+
     # --- Build and send embed ---
-    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display)
+    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display, all_same_geo)
 
     if chart_bytes:
         file = discord.File(io.BytesIO(chart_bytes), filename="skill_chart.png")
