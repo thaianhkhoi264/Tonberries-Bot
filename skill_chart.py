@@ -75,7 +75,8 @@ _GEO_FIELDS = {
     "is_finalcorner_laterhalf",
     "phase_corner_random",
     # Straights
-    "is_last_straight",       "last_straight_random",
+    "is_last_straight",       "is_last_straight_onetime",
+    "last_straight_random",
     "straight_front_type",    "straight_random",
     "phase_straight_random",
     "phase_first_half_straight_random",
@@ -287,7 +288,7 @@ def _eval_and_group(group: str, course: dict) -> list:
             else:      result = []; break
 
         # ── Straights ────────────────────────────────────────────────────────
-        elif field == "is_last_straight":
+        elif field in ("is_last_straight", "is_last_straight_onetime"):
             if ival == 1:   con = [last_home]
             else:           con = _subtract([(0.0, float(d))], [last_home])
 
