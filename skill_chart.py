@@ -85,7 +85,13 @@ _GEO_FIELDS = {
     "slope",
     "up_slope_random",        "down_slope_random",
     # Last spurt
-    "is_lastspurt",
+    "is_lastspurt",           "lastspurt",
+    "run_at_full_speed_random",
+    # Change-order erlang randoms (have geo bounds)
+    "change_order_up_end_after",
+    "change_order_up_finalcorner_after",
+    "change_order_up_middle",
+    "compete_fight_count",
     # Course properties (filters that can eliminate trigger)
     "distance_type", "ground_type", "course_distance",
     "track_id", "rotation", "corner_count",
@@ -106,12 +112,14 @@ _RANDOM_FIELDS = {
     "distance_rate_after_random",
     "down_slope_random", "up_slope_random",
     "run_at_full_speed_random",
+    # Erlang/uniform randoms with geo bounds
+    "change_order_up_end_after", "change_order_up_finalcorner_after",
+    "change_order_up_middle", "compete_fight_count",
     # Runtime-state random fields (not chartable geometrically)
     "bashin_diff_behind", "bashin_diff_infront",
     "behind_near_lane_time", "behind_near_lane_time_set1", "blocked_all_continuetime",
     "blocked_front", "blocked_front_continuetime", "blocked_side_continuetime",
-    "change_order_onetime", "change_order_up_end_after", "change_order_up_finalcorner_after",
-    "change_order_up_middle", "compete_fight_count", "infront_near_lane_time",
+    "change_order_onetime", "infront_near_lane_time",
     "is_move_lane", "is_overtake", "is_surrounded", "near_count",
     "overtake_target_no_order_up_time", "overtake_target_time",
 }
@@ -186,8 +194,8 @@ def _eval_and_group(group: str, course: dict) -> list:
     slopes    = course.get("slopes", [])
     c_ranges  = [(c["start"], c["start"] + c["length"]) for c in corners]
     s_ranges  = [(s["start"], s["end"]) for s in straights]
-    last_home = next(((s["start"], s["end"]) for s in reversed(straights) if s.get("frontType") == 1),
-                     (phase_start(d, 3), float(d)))
+    # Last straight = last element by position (matches uma-tools: straights[straights.length-1])
+    last_home = (straights[-1]["start"], straights[-1]["end"]) if straights else (phase_start(d, 3), float(d))
     last_corn = (corners[-1]["start"], corners[-1]["start"] + corners[-1]["length"]) if corners else None
 
     result = [(0.0, float(d))]
@@ -236,6 +244,7 @@ def _eval_and_group(group: str, course: dict) -> list:
             m_pos = d - val
             if op in ("<=", "<"):   con = [(max(0.0, m_pos), float(d))]
             elif op in (">=", ">"): con = [(0.0, max(0.0, m_pos))]
+            elif op == "==":        con = [(max(0.0, m_pos), min(m_pos + 1, float(d)))]
 
         elif field == "furlong":
             con = [((ival - 1) * FURLONG_M, min(ival * FURLONG_M, float(d)))]
@@ -245,15 +254,39 @@ def _eval_and_group(group: str, course: dict) -> list:
             if op == "!=" and ival == 0:
                 con = c_ranges[:]
             elif op == "==" and ival == 0:
-                con = _subtract([(0.0, float(d))], c_ranges)
-            elif op == "==" and 0 < ival <= len(corners):
-                c = corners[ival - 1]
-                con = [(c["start"], c["start"] + c["length"])]
+                # Non-corner areas: gaps between corners (matches uma-tools corner==0)
+                last_end = 0
+                non_corners = []
+                for c in corners:
+                    if c["start"] > last_end:
+                        non_corners.append((float(last_end), float(c["start"])))
+                    last_end = c["start"] + c["length"]
+                if last_end < d:
+                    non_corners.append((float(last_end), float(d)))
+                con = non_corners
+            elif op == "==":
+                # Corner N counted from the end: corner 4 = last, 3 = second-to-last, etc.
+                # Matches uma-tools: index = corners.length + N - 5, step back by 4 for laps
+                n = len(corners)
+                if n + ival >= 5:
+                    corner_list = []
+                    idx = n + ival - 5
+                    while idx >= 0:
+                        c = corners[idx]
+                        corner_list.append((float(c["start"]), float(c["start"] + c["length"])))
+                        idx -= 4
+                    corner_list.reverse()
+                    con = corner_list
+                # else: corner doesn't exist on this track → con stays []
 
         elif field == "corner_random":
-            if op == "==" and 0 < ival <= len(corners):
-                c = corners[ival - 1]
-                con = [(c["start"], c["start"] + c["length"])]
+            if op == "==":
+                n = len(corners)
+                if n + ival >= 5:
+                    idx = n + ival - 5
+                    if 0 <= idx < n:
+                        c = corners[idx]
+                        con = [(float(c["start"]), float(c["start"] + c["length"]))]
 
         elif field == "all_corner_random":
             if ival == 1:
@@ -262,9 +295,12 @@ def _eval_and_group(group: str, course: dict) -> list:
                     result = []; break
 
         elif field == "is_finalcorner":
-            if last_corn:
-                if ival == 1: con = [last_corn]
-                else:         con = _subtract([(0.0, float(d))], [last_corn])
+            if corners:
+                fc_s = float(corners[-1]["start"])
+                # ==1: from final corner start to end of course (uma-tools: Region(finalCornerStart, distance))
+                # ==0: from start to just before final corner   (uma-tools: Region(0, finalCornerStart))
+                if ival == 1:   con = [(fc_s, float(d))]
+                else:           con = [(0.0, fc_s)]
             elif ival == 1:
                 result = []; break
 
@@ -288,9 +324,16 @@ def _eval_and_group(group: str, course: dict) -> list:
             else:      result = []; break
 
         # ── Straights ────────────────────────────────────────────────────────
-        elif field in ("is_last_straight", "is_last_straight_onetime"):
+        elif field == "is_last_straight":
+            # Full last straight (last element by position)
             if ival == 1:   con = [last_home]
             else:           con = _subtract([(0.0, float(d))], [last_home])
+
+        elif field == "is_last_straight_onetime":
+            # 10m trigger window at the entry of the last straight (uma-tools exact)
+            if ival == 1:
+                ls_start = last_home[0]
+                con = [(ls_start, ls_start + 10.0)]
 
         elif field == "last_straight_random":
             if ival == 1:
@@ -313,13 +356,13 @@ def _eval_and_group(group: str, course: dict) -> list:
 
         elif field == "phase_first_half_straight_random":
             ph_rng = [_phase_first_half(d, ival)]
-            inter  = _intersect([ph_rng], _merge(s_ranges))
+            inter  = _intersect(ph_rng, _merge(s_ranges))
             if inter:  con = inter
             else:      result = []; break
 
         elif field == "phase_latter_half_straight_random":
             ph_rng = [_phase_latter_half(d, ival)]
-            inter  = _intersect([ph_rng], _merge(s_ranges))
+            inter  = _intersect(ph_rng, _merge(s_ranges))
             if inter:  con = inter
             else:      result = []; break
 
@@ -347,11 +390,42 @@ def _eval_and_group(group: str, course: dict) -> list:
 
         # ── Last spurt ───────────────────────────────────────────────────────
         elif field == "is_lastspurt":
-            ph3 = (phase_start(d, 3), float(d))
+            # uma-tools: phaseStart(2) = 2/3 of distance, with dynamic s.isLastSpurt check
+            ph2 = (phase_start(d, 2), float(d))
             if op == "==" and ival == 1:
-                con = [ph3]
+                con = [ph2]
             elif op == "==" and ival == 0:
-                con = _subtract([(0.0, float(d))], [ph3])
+                con = [(0.0, phase_start(d, 2))]
+
+        elif field == "lastspurt":
+            # 3-case version: 1/2 = in spurt, 3 = not in spurt
+            # Static geo bound: phase 2 start to end (uma-tools: phaseStart(2))
+            if ival in (1, 2):
+                con = [(phase_start(d, 2), float(d))]
+            elif ival == 3:
+                con = [(0.0, phase_start(d, 2))]
+
+        elif field == "run_at_full_speed_random":
+            # Restricted to phase 3 (uma-tools: phaseStart(3) to end)
+            if ival == 1:
+                con = [(phase_start(d, 3), float(d))]
+
+        # ── Change-order erlang randoms (have geo bounds) ─────────────────────
+        elif field == "change_order_up_end_after":
+            con = [(phase_start(d, 2), float(d))]
+
+        elif field == "change_order_up_finalcorner_after":
+            if corners:
+                con = [(float(corners[-1]["start"]), float(d))]
+            else:
+                result = []; break
+
+        elif field == "change_order_up_middle":
+            con = [_phase_range(d, 1)]
+
+        elif field == "compete_fight_count":
+            # Restricted to last straight (uma-tools: uniform random in last straight)
+            con = [last_home]
 
         # ── Course property filters ───────────────────────────────────────────
         elif field == "distance_type":
