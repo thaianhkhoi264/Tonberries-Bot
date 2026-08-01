@@ -475,14 +475,19 @@ def _eval_and_group(group: str, course: dict) -> list:
 
 
 def evaluate_trigger(condition: str, precondition: str, course: dict):
-    if not condition:
-        return [(0.0, float(course["distance"]))]
-    groups = [r for g in condition.split("@") for r in _eval_and_group(g, course)]
-    result = _merge(groups)
+    d = float(course["distance"])
+    floor_start = 0.0
     if precondition:
         pre = _merge([r for g in precondition.split("@") for r in _eval_and_group(g, course)])
-        if pre:
-            result = _intersect(result, pre)
+        if not pre:
+            return []   # precondition can never be satisfied on this course
+        floor_start = pre[0][0]
+    if not condition:
+        return [(floor_start, d)]
+    groups = [r for g in condition.split("@") for r in _eval_and_group(g, course)]
+    result = _merge(groups)
+    if floor_start > 0.0:
+        result = _intersect(result, [(floor_start, d)])
     return result
 
 
@@ -573,6 +578,8 @@ _STAT_T = {1, 2, 3, 4, 5}
 def format_effects(effects) -> str:
     parts = []
     for e in effects:
+        if e.get("target", 1) not in (1, 2):   # Self=1, All=2 only (matches uma-tools isTarget)
+            continue
         n = _ETYPE.get(e.get("type", 0))
         if not n: continue
         val = e.get("modifier", 0) / 10000
