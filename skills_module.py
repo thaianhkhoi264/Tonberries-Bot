@@ -209,10 +209,11 @@ def _build_chart_embed(
     course_id: int | None,
     course_display: str,
     all_same_geo: bool = False,
+    alt_index: int = 0,
 ) -> discord.Embed:
     """Build a rich embed with condition blocks, effect summary, and optional chart."""
     alts   = entry.get("alternatives", [])
-    alt    = alts[0] if alts else {}
+    alt    = alts[alt_index] if alts and alt_index < len(alts) else (alts[0] if alts else {})
     cond   = alt.get("condition", "")
     precond = alt.get("precondition", "")
     bdur   = int(alt.get("baseDuration", 0))
@@ -251,7 +252,7 @@ def _build_chart_embed(
     else:
         desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
         if len(alts) > 1:
-            desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #1)*")
+            desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #{alt_index + 1})*")
 
     # External links (only when a course is resolved so visualizer link is meaningful)
     if course_id:
@@ -400,11 +401,16 @@ async def handle_skill_interaction(
     if course_id is not None:
         course_entry = cm_module.get_course_entry(course_id)
         if course_entry:
-            alts   = entry.get("alternatives", [])
-            alt    = alts[0] if alts else {}
-            cond   = alt.get("condition", "")
+            alts = entry.get("alternatives", [])
+            alt_index = 0
+            for i, a in enumerate(alts):
+                if evaluate_trigger(a.get("condition", ""), a.get("precondition", ""), course_entry):
+                    alt_index = i
+                    break
+            alt     = alts[alt_index] if alts else {}
+            cond    = alt.get("condition", "")
             precond = alt.get("precondition", "")
-            bdur   = int(alt.get("baseDuration", 0))
+            bdur    = int(alt.get("baseDuration", 0))
             loop = asyncio.get_event_loop()
             try:
                 chart_bytes = await loop.run_in_executor(
@@ -419,15 +425,17 @@ async def handle_skill_interaction(
             ranges0 = evaluate_trigger(cond, precond, course_entry)
             all_same_geo = len(alts) > 1 and all(
                 evaluate_trigger(a.get("condition", ""), a.get("precondition", ""), course_entry) == ranges0
-                for a in alts[1:]
+                for a in alts if a is not alt
             )
         else:
+            alt_index = 0
             all_same_geo = False
     else:
+        alt_index = 0
         all_same_geo = False
 
     # --- Build and send embed ---
-    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display, all_same_geo)
+    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display, all_same_geo, alt_index)
 
     if chart_bytes:
         file = discord.File(io.BytesIO(chart_bytes), filename="skill_chart.png")
