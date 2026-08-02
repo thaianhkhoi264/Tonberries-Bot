@@ -24,6 +24,9 @@ _format_cond_block(cond) -> str
 
 format_effects(effects) -> str
     Human-readable effect summary from uma-skill-tools effect list.
+
+accel_verdict(condition, precondition, effects, course=None, is_inherited=False) -> str | None
+    One-line quality verdict for acceleration skills; None if no accel effect.
 """
 from __future__ import annotations
 
@@ -575,6 +578,93 @@ _ETYPE = {
 }
 _STAT_T = {1, 2, 3, 4, 5}
 
+def _extract_verdict_state(condition: str) -> list[str]:
+    """
+    Return natural-language notes for notable runtime state conditions in all OR groups.
+    Only notes that appear in EVERY OR group (intersection) are returned — those are always required.
+    """
+    groups = [g for g in condition.split("@") if g.strip()]
+    if not groups:
+        return []
+
+    def _atoms(group: str) -> dict[str, list[tuple[str, float]]]:
+        result: dict[str, list[tuple[str, float]]] = {}
+        for m in _COND_RE.finditer(group):
+            f, op, raw = m.group(1), m.group(2), m.group(3)
+            if f in _GEO_FIELDS:
+                continue
+            result.setdefault(f, []).append((op, float(raw)))
+        return result
+
+    # Collect atoms per group, then keep only fields present in ALL groups
+    all_atoms = [_atoms(g) for g in groups]
+    common_fields = set(all_atoms[0].keys())
+    for a in all_atoms[1:]:
+        common_fields &= set(a.keys())
+
+    # Use first group's values for common fields (they're the same constraint across groups)
+    atoms = all_atoms[0]
+    notes: list[str] = []
+
+    # order_rate — percentage-based position
+    if "order_rate" in common_fields:
+        ge_val = next((v for op, v in atoms["order_rate"] if op == ">="), None)
+        le_val = next((v for op, v in atoms["order_rate"] if op == "<="), None)
+        if ge_val is not None and le_val is not None:
+            lo = math.ceil(ge_val / 100.0 * CM_HORSES)
+            hi = math.floor(le_val / 100.0 * CM_HORSES)
+            if lo == hi:
+                notes.append(f"{lo}th (CM)")
+            else:
+                notes.append(f"{lo}th\u2013{hi}th (CM)")
+        elif le_val is not None:
+            notes.append(f"top {max(1, math.floor(le_val / 100.0 * CM_HORSES))} (CM)")
+        elif ge_val is not None:
+            notes.append(f"{math.ceil(ge_val / 100.0 * CM_HORSES)}th+ (CM)")
+
+    # order — absolute race position
+    if "order" in common_fields:
+        ge_o = next((v for op, v in atoms["order"] if op == ">="), None)
+        le_o = next((v for op, v in atoms["order"] if op == "<="), None)
+        eq_o = next((v for op, v in atoms["order"] if op == "=="), None)
+        if eq_o is not None:
+            notes.append("1st place" if int(eq_o) == 1 else f"{int(eq_o)}th place")
+        elif ge_o is not None and le_o is not None:
+            notes.append(f"{int(ge_o)}th\u2013{int(le_o)}th")
+        elif le_o is not None:
+            notes.append(f"top {int(le_o)}")
+        elif ge_o is not None:
+            notes.append(f"{int(ge_o)}th or below")
+
+    # temptation_count == 0
+    if "temptation_count" in common_fields:
+        for op, v in atoms["temptation_count"]:
+            if op == "==" and v == 0:
+                notes.append("not rushed")
+
+    # infront_near_lane_time >= X
+    if "infront_near_lane_time" in common_fields:
+        for op, _ in atoms["infront_near_lane_time"]:
+            if op == ">=":
+                notes.append("being blocked")
+                break
+
+    # blocked_front_continuetime >= X (units: 1/10000 s)
+    if "blocked_front_continuetime" in common_fields:
+        for op, v in atoms["blocked_front_continuetime"]:
+            if op == ">=":
+                notes.append(f"blocked for {v / 10000:.0f}s+")
+                break
+
+    # motivation >= X
+    if "motivation" in common_fields:
+        for op, v in atoms["motivation"]:
+            if op == ">=":
+                notes.append(f"mood {int(v)}+")
+
+    return notes
+
+
 def format_effects(effects) -> str:
     parts = []
     for e in effects:
@@ -588,6 +678,117 @@ def format_effects(effects) -> str:
         else:
             parts.append(f"{n} {val:+g}")
     return ", ".join(parts) or "—"
+
+
+def accel_verdict(
+    condition: str,
+    precondition: str,
+    effects: list,
+    course: dict | None = None,
+    is_inherited: bool = False,
+) -> str | None:
+    """
+    Return a one-line Verdict for skills with an Acceleration (type 31) effect, or None.
+    Inherited skills (9XXXXX) use a separate, lower power scale.
+    Timing analysis requires a course dict; without one a condition-string fallback is used.
+    """
+    # ── 1. Find acceleration modifier ──────────────────────────────────────
+    accel_mod = None
+    for e in effects:
+        if e.get("type") == 31 and e.get("target", 1) in (1, 2):
+            accel_mod = e.get("modifier", 0) / 10000
+            break
+    if accel_mod is None:
+        return None
+
+    # ── 2. Power label ─────────────────────────────────────────────────────
+    if is_inherited:
+        if accel_mod >= 0.18:
+            power = "Great inherited accel"
+        elif accel_mod >= 0.08:
+            power = "Decent inherited accel"
+        else:
+            power = "Minor inherited accel"
+    else:
+        if accel_mod >= 0.35:
+            power = "Really good accel"
+        elif accel_mod >= 0.25:
+            power = "Good accel"
+        elif accel_mod >= 0.15:
+            power = "Decent accel"
+        else:
+            power = "Minor accel"
+
+    # ── 3. Reliability ─────────────────────────────────────────────────────
+    combined = condition + ("&" + precondition if precondition else "")
+    has_random = any(m.group(1) in _RANDOM_FIELDS for m in _COND_RE.finditer(combined))
+
+    # ── 4. Timing ──────────────────────────────────────────────────────────
+    timing_note = ""
+    reliability_note = ""
+
+    if course:
+        d = float(course["distance"])
+        regions = evaluate_trigger(condition, precondition, course)
+        if regions:
+            w_start = regions[0][0]
+            w_end   = regions[-1][1]
+            p1 = phase_start(d, 1)
+            p2 = phase_start(d, 2)
+            p3 = phase_start(d, 3)
+            early_thresh = p1 + (p2 - p1) * 0.4  # ~40% into phase 1
+
+            # Special A: Leader start skill (running_style==1 + window before phase 1)
+            if re.search(r"running_style==1", condition) and w_start < p1:
+                power += " for front runners"
+                # no timing penalty
+
+            # Special B: random trigger
+            elif has_random:
+                any_in_late = any(r[1] > p2 for r in regions)
+                if not any_in_late:
+                    timing_note = "doesn't reach late race on this course"
+                else:
+                    # "can activate late" only when window is late-biased (starts near p2, extends past p3)
+                    if w_start >= p2 - 0.05 * d and w_end > p3:
+                        timing_note = "can activate late"
+                    reliability_note = "unreliable"
+
+            # Normal deterministic
+            else:
+                if w_start >= p3:
+                    timing_note = "activates too late"
+                elif w_start < p1:
+                    timing_note = "activates too early"
+                elif w_start < early_thresh:
+                    timing_note = "activates somewhat early"
+
+    else:
+        # Fallback: condition-string heuristics
+        _late_markers = ("phase>=2", "is_lastspurt", "is_finalcorner==1", "lastspurt")
+        has_late = any(x in condition for x in _late_markers)
+        if re.search(r"running_style==1", condition) and not has_late:
+            power += " for front runners"
+        elif re.search(r"phase>=3", condition):
+            timing_note = "activates too late"
+        elif re.search(r"is_lastspurt==1", condition) and has_random:
+            timing_note = "can activate late"
+
+    # ── 5. State conditions ────────────────────────────────────────────────
+    state_notes = _extract_verdict_state(condition)
+
+    # ── 6. Build sentence ──────────────────────────────────────────────────
+    parts = [power]
+    issues = [x for x in [timing_note, reliability_note] if x]
+
+    if state_notes:
+        cond_text = " and ".join(state_notes)
+        parts.append(("requires " if issues else "but requires ") + cond_text)
+
+    if issues:
+        parts.append("but " + " and ".join(issues))
+
+    return ", ".join(parts)
 
 
 # ---------------------------------------------------------------------------
