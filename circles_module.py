@@ -28,8 +28,8 @@ RANK_EMOJIS = {
 # 1-indexed to match API's club_rank field (1=D, 2=D+, ... 11=SS)
 RANK_ORDER = ["", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS"]
 
-MONTHLY_REQUIREMENT = 20_000_000
-STARE_THRESHOLD     = 3_000_000
+_monthly_requirement: int = 20_000_000   # kept in sync with DB; use get/set_monthly_requirement()
+STARE_THRESHOLD      = 3_000_000
 
 STATUS_EMOJIS = {
     "goal_met":   "<a:diapat:1508665594013286400>",
@@ -92,6 +92,15 @@ async def init_db() -> None:
                 await conn.execute(f"ALTER TABLE circle_member_snapshots ADD COLUMN {col} INTEGER")
             except Exception:
                 pass
+        # Load persisted monthly requirement into the module variable
+        global _monthly_requirement
+        raw = await _get(conn, "monthly_requirement")
+        if raw:
+            try:
+                _monthly_requirement = int(json.loads(raw).get("value", _monthly_requirement))
+            except Exception:
+                pass
+
         await conn.commit()
 
 
@@ -147,6 +156,32 @@ async def get_shaming_enabled() -> bool:
 async def set_shaming_enabled(enabled: bool) -> None:
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _set(conn, "shaming_enabled", "1" if enabled else "0")
+        await conn.commit()
+
+
+async def get_monthly_requirement() -> dict:
+    """Return {"value": int, "changed_at": str|None, "changed_by": int|None}."""
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        raw = await _get(conn, "monthly_requirement")
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    return {"value": _monthly_requirement, "changed_at": None, "changed_by": None}
+
+
+async def set_monthly_requirement(new_val: int, changed_by: int) -> None:
+    """Persist a new fan requirement and update the in-memory copy."""
+    global _monthly_requirement
+    _monthly_requirement = new_val
+    data = {
+        "value": new_val,
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+        "changed_by": changed_by,
+    }
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _set(conn, "monthly_requirement", json.dumps(data))
         await conn.commit()
 
 
@@ -210,7 +245,7 @@ def _classify_lists(members: list[dict]) -> tuple[list[dict], list[dict]]:
     now            = datetime.now(timezone.utc)
     days_in_month  = calendar.monthrange(now.year, now.month)[1]
     days_remaining = days_in_month - now.day
-    daily_quota    = MONTHLY_REQUIREMENT // days_in_month
+    daily_quota    = _monthly_requirement // days_in_month
 
     watchlist: list[dict] = []
     hitlist:   list[dict] = []
@@ -221,10 +256,10 @@ def _classify_lists(members: list[dict]) -> tuple[list[dict], list[dict]]:
         gains3       = _last_daily_gains(df, n=3)
 
         # Members who reached the goal are never on either list
-        if monthly_gain >= MONTHLY_REQUIREMENT or days_remaining <= 0:
+        if monthly_gain >= _monthly_requirement or days_remaining <= 0:
             continue
 
-        remaining    = MONTHLY_REQUIREMENT - monthly_gain
+        remaining    = _monthly_requirement - monthly_gain
         daily_needed = math.ceil(remaining / days_remaining)
 
         entry: dict = {
@@ -273,8 +308,8 @@ def _member_status(gained: int) -> MemberStatus:
     days_elapsed   = now.day
     days_remaining = days_in_month - days_elapsed
 
-    monthly_target = MONTHLY_REQUIREMENT
-    expected_today = MONTHLY_REQUIREMENT * days_elapsed // days_in_month
+    monthly_target = _monthly_requirement
+    expected_today = _monthly_requirement * days_elapsed // days_in_month
 
     if gained >= monthly_target:
         over = gained - monthly_target
@@ -430,7 +465,7 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
 
     now           = datetime.now(timezone.utc)
     days_in_month = calendar.monthrange(now.year, now.month)[1]
-    daily_quota   = MONTHLY_REQUIREMENT // days_in_month
+    daily_quota   = _monthly_requirement // days_in_month
 
     goal_met: list[tuple] = []
     behind:   list[tuple] = []
@@ -505,6 +540,29 @@ def _build_list_lines(entries: list[dict]) -> list[str]:
     lines   = [_format_list_line(e) for e in sorted(active, key=lambda x: x["daily_needed"], reverse=True)]
     lines  += [_format_list_line(e) for e in sorted(sniped, key=lambda x: x["daily_needed"], reverse=True)]
     return lines
+
+
+def _build_requirement_embed(req_data: dict) -> discord.Embed:
+    value      = req_data.get("value", _monthly_requirement)
+    changed_at = req_data.get("changed_at")
+    changed_by = req_data.get("changed_by")
+
+    embed = discord.Embed(
+        title="Monthly Fan Requirement",
+        description=f"**{value:,}** fans per member",
+        colour=discord.Colour.blurple(),
+    )
+    if changed_at:
+        try:
+            ts = int(datetime.fromisoformat(changed_at).timestamp())
+            embed.add_field(name="Last changed", value=f"<t:{ts}:F>\n<t:{ts}:R>", inline=True)
+        except Exception:
+            pass
+    if changed_by:
+        embed.add_field(name="Changed by", value=f"<@{changed_by}>", inline=True)
+    if not changed_at and not changed_by:
+        embed.set_footer(text="Default value — never manually changed")
+    return embed
 
 
 def _build_watchlist_embed(entries: list[dict]) -> discord.Embed:
@@ -687,7 +745,7 @@ async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
         if mid is None:
             break
         order_keys.append(f"circle_members_msg_{i}")
-    order_keys += ["circle_watchlist_msg", "circle_hitlist_msg"]
+    order_keys += ["circle_watchlist_msg", "circle_hitlist_msg", "circle_req_msg"]
 
     known: list[tuple[str, str]] = []
     for key in order_keys:
@@ -844,6 +902,13 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         )
         await _set(conn, "circle_watchlist_msg", wl_id)
         await _set(conn, "circle_hitlist_msg", hl_id)
+
+        req_raw = await _get(conn, "monthly_requirement")
+        req_data: dict = json.loads(req_raw) if req_raw else {"value": _monthly_requirement}
+        req_id = await _send_or_edit_embed(
+            channel, conn, "circle_req_msg", _build_requirement_embed(req_data)
+        )
+        await _set(conn, "circle_req_msg", req_id)
 
         # Persist full list state (active + sniped) for next update's snipe detection
         def _serialise_list(entries: list[dict]) -> str:

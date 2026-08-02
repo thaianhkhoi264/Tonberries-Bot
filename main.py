@@ -175,6 +175,10 @@ async def on_message(message: discord.Message):
         await _cmd_report(message)
     elif cmd_lower in ("shaming on", "shaming off"):
         await _cmd_shaming(message, cmd_lower == "shaming on")
+    elif cmd_lower == "fancount":
+        await _cmd_fancount(message)
+    elif cmd_lower.startswith("fancount "):
+        await _cmd_fancount(message, cmd[len("fancount "):])
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -197,6 +201,8 @@ async def _cmd_help(message: discord.Message):
         "`circles` — Force-refresh the club circle stats\n"
         "`report` — Force-send the daily fan report to you\n"
         "`shaming on/off` — Toggle posting the daily report to uma-chat-v2\n"
+        "`fancount` — Show current monthly fan requirement\n"
+        "`fancount edit <number>` — Change the monthly fan requirement and refresh the channel\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
@@ -252,6 +258,54 @@ async def _cmd_shaming(message: discord.Message, enable: bool) -> None:
     await circles_module.set_shaming_enabled(enable)
     state = "on" if enable else "off"
     await message.channel.send(f"Public shaming turned **{state}**.")
+
+
+async def _cmd_fancount(message: discord.Message, args: str = "") -> None:
+    args = args.strip()
+    if not args:
+        req = await circles_module.get_monthly_requirement()
+        val = req["value"]
+        changed_at = req.get("changed_at")
+        changed_by = req.get("changed_by")
+        lines = [f"Monthly fan requirement: **{val:,}**"]
+        if changed_at:
+            try:
+                from datetime import datetime
+                ts = int(datetime.fromisoformat(changed_at).timestamp())
+                lines.append(f"Last changed: <t:{ts}:F>")
+            except Exception:
+                pass
+        if changed_by:
+            lines.append(f"Changed by: <@{changed_by}>")
+        lines.append("\nUsage: `fancount edit <number>`")
+        await message.channel.send("\n".join(lines))
+        return
+
+    parts = args.split()
+    if parts[0].lower() != "edit" or len(parts) < 2:
+        await message.channel.send("Usage: `fancount` or `fancount edit <number>`")
+        return
+
+    try:
+        new_val = int(parts[1].replace(",", "").replace("_", ""))
+    except ValueError:
+        await message.channel.send(f"Invalid number: `{parts[1]}`")
+        return
+
+    if new_val <= 0:
+        await message.channel.send("Fan requirement must be a positive number.")
+        return
+
+    await circles_module.set_monthly_requirement(new_val, message.author.id)
+    await message.channel.send(
+        f"Monthly fan requirement updated to **{new_val:,}**. Refreshing club display…"
+    )
+    try:
+        await circles_module.post_or_edit(force=True)
+        await message.channel.send("Club display refreshed.")
+    except Exception as exc:
+        logger.error(f"[Bot] Fancount refresh failed: {exc}")
+        await message.channel.send(f"Refresh failed: {exc}")
 
 
 async def _cmd_circles(message: discord.Message):
