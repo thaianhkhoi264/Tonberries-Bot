@@ -24,7 +24,7 @@ from global_config import (
     SKILL_NAMES_JSON,
     SKILLS_DB,
 )
-from skill_chart import build_skill_chart, format_effects, _format_cond_block, evaluate_trigger
+from skill_chart import build_skill_chart, format_effects, _format_cond_block, evaluate_trigger, accel_verdict
 
 logger = logging.getLogger("skills_module")
 
@@ -210,6 +210,8 @@ def _build_chart_embed(
     course_display: str,
     all_same_geo: bool = False,
     alt_index: int = 0,
+    course_entry: dict | None = None,
+    is_inherited: bool = False,
 ) -> discord.Embed:
     """Build a rich embed with condition blocks, effect summary, and optional chart."""
     alts   = entry.get("alternatives", [])
@@ -253,6 +255,11 @@ def _build_chart_embed(
         desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
         if len(alts) > 1:
             desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #{alt_index + 1})*")
+
+    # Verdict (acceleration skills only)
+    verdict = accel_verdict(cond, precond, alt.get("effects", []), course_entry, is_inherited)
+    if verdict:
+        desc_parts.append(f"\n**Verdict:** {verdict}")
 
     # External links (only when a course is resolved so visualizer link is meaningful)
     if course_id:
@@ -398,9 +405,11 @@ async def handle_skill_interaction(
 
     # --- Generate chart (CPU-bound; run in thread pool) ---
     chart_bytes: bytes | None = None
+    course_entry_for_embed: dict | None = None
     if course_id is not None:
         course_entry = cm_module.get_course_entry(course_id)
         if course_entry:
+            course_entry_for_embed = course_entry
             alts = entry.get("alternatives", [])
             alt_index = 0
             for i, a in enumerate(alts):
@@ -435,7 +444,13 @@ async def handle_skill_interaction(
         all_same_geo = False
 
     # --- Build and send embed ---
-    embed = _build_chart_embed(skill_id, en_name, entry, gt, course_id, course_display, all_same_geo, alt_index)
+    embed = _build_chart_embed(
+        skill_id, en_name, entry, gt,
+        course_id, course_display,
+        all_same_geo, alt_index,
+        course_entry=course_entry_for_embed,
+        is_inherited=is_inherited,
+    )
 
     if chart_bytes:
         file = discord.File(io.BytesIO(chart_bytes), filename="skill_chart.png")
