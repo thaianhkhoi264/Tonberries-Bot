@@ -762,7 +762,7 @@ def accel_verdict(
             elif has_random:
                 any_in_late = any(r[1] > p2 for r in regions)
                 if not any_in_late:
-                    timing_note = "doesn't reach late race on this course"
+                    timing_note = "doesn't activate at late race"
                 else:
                     # "can activate late" only when window is late-biased (starts near p2, extends past p3)
                     if w_start >= p2 - 0.05 * d and w_end > p3:
@@ -796,7 +796,10 @@ def accel_verdict(
     has_issues = bool(timing_note or reliability_note)
     tier = max(0, base_tier - (1 if has_issues else 0))
     overall_rating = rating_labels[min(tier, 3)]
-    if front_runner:
+    # "doesn't activate at late race" overrides everything — the skill is unusable on this course
+    if timing_note == "doesn't activate at late race":
+        overall_rating = "Bad inherited accel" if is_inherited else "Bad accel"
+    elif front_runner:
         overall_rating += " for front runners"
 
     # ── 6. State conditions ────────────────────────────────────────────────
