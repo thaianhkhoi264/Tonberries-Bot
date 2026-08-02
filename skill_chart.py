@@ -689,7 +689,10 @@ def accel_verdict(
 ) -> str | None:
     """
     Return a one-line Verdict for skills with an Acceleration (type 31) effect, or None.
-    Inherited skills (9XXXXX) use a separate, lower power scale.
+    Format: "{overall rating}, {potency}[, but {caveats}][, requires {conditions}]"
+    The overall rating is the holistic tier (downgraded by 1 if any timing/reliability issue).
+    The potency always reflects the raw modifier value independently of issues.
+    Inherited skills (9XXXXX) use a separate, lower scale.
     Timing analysis requires a course dict; without one a condition-string fallback is used.
     """
     # ── 1. Find acceleration modifier ──────────────────────────────────────
@@ -701,23 +704,35 @@ def accel_verdict(
     if accel_mod is None:
         return None
 
-    # ── 2. Power label ─────────────────────────────────────────────────────
+    # ── 2. Potency tier + descriptor ───────────────────────────────────────
     if is_inherited:
         if accel_mod >= 0.18:
-            power = "Great inherited accel"
+            base_tier, potency = 3, "high acceleration"
         elif accel_mod >= 0.08:
-            power = "Decent inherited accel"
+            base_tier, potency = 2, "moderate acceleration"
         else:
-            power = "Minor inherited accel"
+            base_tier, potency = 1, "low acceleration"
+        rating_labels = [
+            "Weak inherited accel",
+            "Minor inherited accel",
+            "Decent inherited accel",
+            "Great inherited accel",
+        ]
     else:
         if accel_mod >= 0.35:
-            power = "Really good accel"
+            base_tier, potency = 3, "very high acceleration"
         elif accel_mod >= 0.25:
-            power = "Good accel"
+            base_tier, potency = 2, "high acceleration"
         elif accel_mod >= 0.15:
-            power = "Decent accel"
+            base_tier, potency = 1, "moderate acceleration"
         else:
-            power = "Minor accel"
+            base_tier, potency = 0, "low acceleration"
+        rating_labels = [
+            "Weak accel",
+            "Decent accel",
+            "Good accel",
+            "Great accel",
+        ]
 
     # ── 3. Reliability ─────────────────────────────────────────────────────
     combined = condition + ("&" + precondition if precondition else "")
@@ -726,6 +741,7 @@ def accel_verdict(
     # ── 4. Timing ──────────────────────────────────────────────────────────
     timing_note = ""
     reliability_note = ""
+    front_runner = False
 
     if course:
         d = float(course["distance"])
@@ -740,8 +756,7 @@ def accel_verdict(
 
             # Special A: Leader start skill (running_style==1 + window before phase 1)
             if re.search(r"running_style==1", condition) and w_start < p1:
-                power += " for front runners"
-                # no timing penalty
+                front_runner = True
 
             # Special B: random trigger
             elif has_random:
@@ -752,7 +767,7 @@ def accel_verdict(
                     # "can activate late" only when window is late-biased (starts near p2, extends past p3)
                     if w_start >= p2 - 0.05 * d and w_end > p3:
                         timing_note = "can activate late"
-                    reliability_note = "unreliable"
+                    reliability_note = "can be unreliable"
 
             # Normal deterministic
             else:
@@ -768,25 +783,39 @@ def accel_verdict(
         _late_markers = ("phase>=2", "is_lastspurt", "is_finalcorner==1", "lastspurt")
         has_late = any(x in condition for x in _late_markers)
         if re.search(r"running_style==1", condition) and not has_late:
-            power += " for front runners"
+            front_runner = True
         elif re.search(r"phase>=3", condition):
             timing_note = "activates too late"
         elif re.search(r"is_lastspurt==1", condition) and has_random:
             timing_note = "can activate late"
+            reliability_note = "can be unreliable"
+        elif has_random:
+            reliability_note = "can be unreliable"
 
-    # ── 5. State conditions ────────────────────────────────────────────────
+    # ── 5. Overall rating (base tier penalised -1 for any issues) ──────────
+    has_issues = bool(timing_note or reliability_note)
+    tier = max(0, base_tier - (1 if has_issues else 0))
+    overall_rating = rating_labels[min(tier, 3)]
+    if front_runner:
+        overall_rating += " for front runners"
+
+    # ── 6. State conditions ────────────────────────────────────────────────
     state_notes = _extract_verdict_state(condition)
 
-    # ── 6. Build sentence ──────────────────────────────────────────────────
-    parts = [power]
+    # ── 7. Build sentence ──────────────────────────────────────────────────
+    # Format: "{overall_rating}, {potency}[, but {caveats}][, requires {conditions}]"
+    parts = [overall_rating, potency]
     issues = [x for x in [timing_note, reliability_note] if x]
-
-    if state_notes:
-        cond_text = " and ".join(state_notes)
-        parts.append(("requires " if issues else "but requires ") + cond_text)
 
     if issues:
         parts.append("but " + " and ".join(issues))
+
+    if state_notes:
+        cond_text = " and ".join(state_notes)
+        if issues:
+            parts.append("requires " + cond_text)
+        else:
+            parts.append("but requires " + cond_text)
 
     return ", ".join(parts)
 
