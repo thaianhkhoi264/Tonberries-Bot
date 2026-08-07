@@ -714,8 +714,8 @@ def accel_verdict(
             base_tier, potency = 1, "low acceleration"
         rating_labels = [
             "Weak inherited accel",
-            "Minor inherited accel",
             "Decent inherited accel",
+            "Good inherited accel",
             "Great inherited accel",
         ]
     else:
@@ -740,82 +740,90 @@ def accel_verdict(
 
     # ── 4. Timing ──────────────────────────────────────────────────────────
     timing_note = ""
-    reliability_note = ""
+    tier_penalty = 0   # 0 = no penalty, 1 = −1 tier, 2 = −2 tiers
     front_runner = False
 
     if course:
         d = float(course["distance"])
         regions = evaluate_trigger(condition, precondition, course)
-        if regions:
+        if not regions:
+            # Skill cannot fire on this course at all
+            timing_note = "won't activate on this course"
+            tier_penalty = 2
+        else:
             w_start = regions[0][0]
-            w_end   = regions[-1][1]
             p1 = phase_start(d, 1)
             p2 = phase_start(d, 2)
-            p3 = phase_start(d, 3)
-            early_thresh = p1 + (p2 - p1) * 0.4  # ~40% into phase 1
 
-            # Special A: Leader start skill (running_style==1 + window before phase 1)
+            # Special A: Leader/front-runner start skill
             if re.search(r"running_style==1", condition) and w_start < p1:
                 front_runner = True
 
-            # Special B: random trigger
             elif has_random:
-                any_in_late = any(r[1] > p2 for r in regions)
-                if not any_in_late:
-                    timing_note = "doesn't activate at late race"
-                else:
-                    # "can activate late" only when window is late-biased (starts near p2, extends past p3)
-                    if w_start >= p2 - 0.05 * d and w_end > p3:
-                        timing_note = "can activate late"
-                    reliability_note = "can be unreliable"
+                # Range skill: does p2 fall inside any activation window?
+                # Total window width = sum of all segment lengths.
+                p2_in_range = any(r[0] <= p2 <= r[1] for r in regions)
+                total_range  = sum(r[1] - r[0] for r in regions)
 
-            # Normal deterministic
+                if p2_in_range:
+                    tier_penalty = 1
+                    if total_range <= 75:
+                        timing_note = "slightly unreliable"
+                    elif total_range <= 150:
+                        timing_note = "can be unreliable"
+                    else:
+                        timing_note = "very unreliable"
+                else:
+                    tier_penalty = 2
+                    timing_note = "activates away from late race"
+
             else:
-                if w_start >= p3:
-                    timing_note = "activates too late"
-                elif w_start < p1:
-                    timing_note = "activates too early"
-                elif w_start < early_thresh:
-                    timing_note = "activates somewhat early"
+                # Deterministic: how close is the first activation to p2?
+                dist = w_start - p2          # negative = early, positive = late
+                abs_dist = abs(dist)
+                direction = "late" if dist > 0 else "early"
+
+                if abs_dist <= 10:
+                    pass  # ideal timing, no penalty
+                elif abs_dist <= 50:
+                    tier_penalty = 1
+                    timing_note = f"activates a little bit too {direction}"
+                else:
+                    tier_penalty = 2
+                    timing_note = f"activates too {direction}"
 
     else:
-        # Fallback: condition-string heuristics
+        # Fallback: condition-string heuristics (no course provided)
         _late_markers = ("phase>=2", "is_lastspurt", "is_finalcorner==1", "lastspurt")
         has_late = any(x in condition for x in _late_markers)
         if re.search(r"running_style==1", condition) and not has_late:
             front_runner = True
         elif re.search(r"phase>=3", condition):
+            tier_penalty = 2
             timing_note = "activates too late"
-        elif re.search(r"is_lastspurt==1", condition) and has_random:
-            timing_note = "can activate late"
-            reliability_note = "can be unreliable"
         elif has_random:
-            reliability_note = "can be unreliable"
+            tier_penalty = 1
+            timing_note = "can be unreliable"
 
-    # ── 5. Overall rating (base tier penalised -1 for any issues) ──────────
-    has_issues = bool(timing_note or reliability_note)
-    tier = max(0, base_tier - (1 if has_issues else 0))
+    # ── 5. Overall rating (penalised by tier_penalty) ──────────────────────
+    tier = max(0, base_tier - tier_penalty)
     overall_rating = rating_labels[min(tier, 3)]
-    # "doesn't activate at late race" overrides everything — the skill is unusable on this course
-    if timing_note == "doesn't activate at late race":
-        overall_rating = "Bad inherited accel" if is_inherited else "Bad accel"
-    elif front_runner:
+    if front_runner:
         overall_rating += " for front runners"
 
     # ── 6. State conditions ────────────────────────────────────────────────
     state_notes = _extract_verdict_state(condition)
 
     # ── 7. Build sentence ──────────────────────────────────────────────────
-    # Format: "{overall_rating}, {potency}[, but {caveats}][, requires {conditions}]"
+    # Format: "{overall_rating}, {potency}[, but {timing}][, requires {conditions}]"
     parts = [overall_rating, potency]
-    issues = [x for x in [timing_note, reliability_note] if x]
 
-    if issues:
-        parts.append("but " + " and ".join(issues))
+    if timing_note:
+        parts.append("but " + timing_note)
 
     if state_notes:
         cond_text = " and ".join(state_notes)
-        if issues:
+        if timing_note:
             parts.append("requires " + cond_text)
         else:
             parts.append("but requires " + cond_text)
