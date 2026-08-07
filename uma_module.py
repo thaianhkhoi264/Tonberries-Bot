@@ -83,9 +83,12 @@ async def _build_embed_with_skills(event: dict) -> discord.Embed:
             return embed
 
         lines = []
-        for name, icon_url in green:
-            emoji = skills_module.skill_icon_emoji(icon_url) if icon_url else ""
-            lines.append(f"{emoji} {name}" if emoji else f"\u2022 {name}")
+        for family in green:
+            parts = []
+            for name, icon_url in family:
+                emoji = skills_module.skill_icon_emoji(icon_url) if icon_url else ""
+                parts.append(f"{emoji} {name}" if emoji else f"\u2022 {name}")
+            lines.append(" / ".join(parts))
 
         section = "\u2500" * 18 + "\n**Green Skills:**\n" + "\n".join(lines)
         if embed.description:
