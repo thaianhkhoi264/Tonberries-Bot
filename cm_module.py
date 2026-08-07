@@ -400,10 +400,10 @@ async def autocomplete_course(
     venues = sorted(n for n, tid in _track_name_to_id.items() if tid in venue_track_ids)
 
     choices: list[app_commands.Choice[str]] = []
-    cur = current.lower()
+    cur = current.lower().replace("#", "")   # "CM18" and "CM#18" both match
 
     def _add(label: str, value: str) -> None:
-        if len(choices) < 25 and (not cur or cur in label.lower()):
+        if len(choices) < 25 and (not cur or cur in label.lower().replace("#", "")):
             choices.append(app_commands.Choice(name=label, value=value))
 
     for cm in upcoming:
