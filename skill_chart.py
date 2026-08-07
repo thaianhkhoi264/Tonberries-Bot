@@ -713,9 +713,9 @@ def accel_verdict(
         else:
             base_tier, potency = 1, "low acceleration"
         rating_labels = [
-            "Weak inherited accel",
+            "Horrible inherited accel",
+            "Bad inherited accel",
             "Decent inherited accel",
-            "Good inherited accel",
             "Great inherited accel",
         ]
     else:
