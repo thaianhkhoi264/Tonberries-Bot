@@ -346,17 +346,17 @@ def _build_chart_embed(
         desc_parts.append(f"**Condition:**\n{cond_block}")
 
     # Effect + duration
-    if all_same_geo and len(alts) > 1:
+    if len(alts) > 1:
         effect_lines = []
         for i, a in enumerate(alts, 1):
             e = format_effects(a.get("effects", []))
             d = int(a.get("baseDuration", 0)) / 10000.0
             effect_lines.append(f"Alt {i}: {e}  |  {d:.1f}s")
         desc_parts.append("\n**Effects:**\n" + "\n".join(effect_lines))
+        if not all_same_geo and course_entry is not None:
+            desc_parts.append(f"*(chart and verdict based on Alt {alt_index + 1})*")
     else:
         desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
-        if len(alts) > 1:
-            desc_parts.append(f"*({len(alts)} alternatives \u2014 showing #{alt_index + 1})*")
 
     # Verdict (acceleration skills only)
     verdict = accel_verdict(cond, precond, alt.get("effects", []), course_entry, is_inherited)
