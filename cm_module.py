@@ -500,6 +500,42 @@ _GROUND_COND_MAP = {"Firm": 1, "Good": 2, "Slightly Soft": 3, "Soft": 3, "Heavy"
 
 _TIER_RE = re.compile(r"\s+[◎○×]\s*$")
 
+# ---------------------------------------------------------------------------
+# Icon-stem whitelist for green skills
+# ---------------------------------------------------------------------------
+# Valid stems: 100XY where X ∈ {1–6} and Y ∈ {1, 2, 6}.
+# Stems ending in 4 are debuff skills and must be excluded.
+_VALID_STEM_RE         = re.compile(r"^100[1-6][126]$")
+_VALID_STEM_EXCEPTIONS = frozenset({"20181", "40012"})
+
+
+def _icon_stem(icon_url: str) -> str:
+    """Extract stem (filename without .png) from a Gametora icon URL."""
+    if not icon_url:
+        return ""
+    return icon_url.rsplit("/", 1)[-1].replace(".png", "")
+
+
+def _valid_green_icon(icon_url: str) -> bool:
+    """Return True if this icon URL is a whitelisted, non-debuff green skill icon."""
+    stem = _icon_stem(icon_url)
+    if not stem:
+        return False
+    if stem in _VALID_STEM_EXCEPTIONS:
+        return True
+    return bool(_VALID_STEM_RE.match(stem))
+
+
+def _icon_y_value(icon_url: str) -> int:
+    """Return the Y digit of a 100XY stem for sort order (1 < 2 < 6)."""
+    stem = _icon_stem(icon_url)
+    if stem in _VALID_STEM_EXCEPTIONS:
+        return 99
+    try:
+        return int(stem[-1])
+    except (ValueError, IndexError):
+        return 99
+
 
 def _is_green_skill(effects: list) -> bool:
     relevant = [e for e in effects if e.get("target", 1) in (1, 2)]
@@ -558,14 +594,23 @@ def _en_skill_name(sid: str) -> str:
     return (raw[0] if isinstance(raw, list) else str(raw)) or f"Skill {sid}"
 
 
-def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[str, str]]:
+def get_cm_green_skills(
+    cm: dict,
+    icon_urls: dict | None = None,
+) -> list[list[tuple[str, str]]]:
     """
-    Return ``(skill_name, icon_url_or_empty)`` pairs for passive stat-boost
-    (green) skills that activate on the given CM's course.
+    Return skill families (passive stat-boost / green) that activate on the
+    given CM's course.
 
-    Skills are filtered to geo/CM-fixed conditions only (no running style,
-    order, mood, etc.), deduplicated to one representative per ID-family
-    (○ tier preferred), and sorted alphabetically.
+    Each item in the returned list is a **family** — a list of
+    ``(skill_name, icon_url)`` tuples ordered by icon-stem Y value
+    (Y=1 first, then Y=2, then Y=6).  Families are sorted alphabetically
+    by the name of their first member.
+
+    Only skills whose icon URL matches the whitelist (``100XY`` where
+    X∈{1–6} and Y∈{1,2,6}, plus exceptions ``20181`` and ``40012``) are
+    included.  Debuff skills (Y=4) and skills with unrecognised icons are
+    excluded automatically.
 
     ``icon_urls`` should be ``{skill_id_str: icon_url}`` (from skills.db).
     """
@@ -592,9 +637,8 @@ def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[s
         precond = alt.get("precondition", "")
         effects = alt.get("effects", [])
 
-        # Rarity 1 = character-specific scenario skills (e.g. ♡ 3D Nail Art).
-        # Only rarity 2 (○) and 3 (◎) are generally trainable/inheritable.
-        if entry.get("rarity", 0) < 2:
+        icon_url = icon_map.get(sid, "")
+        if not _valid_green_icon(icon_url):
             continue
         if not _is_green_skill(effects):
             continue
@@ -609,9 +653,9 @@ def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[s
         if name == f"Skill {sid}":
             continue
 
-        raw.append((name, icon_map.get(sid, ""), sid))
+        raw.append((name, icon_url, sid))
 
-    # Deduplicate: group by sid//10 (same skill family), keep ○ tier
+    # Group by sid // 10 (same skill family); sort each group by icon Y value.
     groups: dict[int, list[tuple[str, str, str]]] = {}
     for name, icon_url, sid in raw:
         try:
@@ -620,9 +664,11 @@ def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[s
             fam = hash(sid)
         groups.setdefault(fam, []).append((name, icon_url, sid))
 
-    result: list[tuple[str, str]] = []
+    result: list[list[tuple[str, str]]] = []
     for fam_skills in groups.values():
-        best = min(fam_skills, key=lambda x: _skill_tier_rank(x[0]))
-        result.append((best[0], best[1]))
+        fam_skills.sort(key=lambda x: _icon_y_value(x[1]))
+        result.append([(name, icon_url) for name, icon_url, _ in fam_skills])
 
-    return sorted(result, key=lambda x: x[0].lower())
+    # Sort families alphabetically by the first member's name.
+    result.sort(key=lambda fam: fam[0][0].lower())
+    return result
