@@ -14,10 +14,93 @@ from global_config import (
     GACHA_BOT_DIR,
     ONGOING_CHANNEL_ID,
     UPCOMING_CHANNEL_ID,
+    SKILLS_DB,
 )
 import notification_module
+import cm_module
+import skills_module
 
 _update_lock = asyncio.Lock()
+
+# Cache of {skill_id_str: icon_url} loaded from skills.db (populated once).
+_icon_urls: dict[str, str] = {}
+_icon_urls_loaded = False
+
+
+async def _ensure_icon_urls() -> None:
+    """Load skill icon URLs from skills.db into the module cache (once)."""
+    global _icon_urls, _icon_urls_loaded
+    if _icon_urls_loaded:
+        return
+    _icon_urls_loaded = True
+    try:
+        async with aiosqlite.connect(SKILLS_DB) as conn:
+            async with conn.execute(
+                "SELECT skill_id, icon_url FROM skills WHERE icon_url IS NOT NULL"
+            ) as cursor:
+                rows = await cursor.fetchall()
+        _icon_urls = {str(r[0]): r[1] for r in rows}
+        logger.info(f"[UMA] Loaded {len(_icon_urls)} skill icon URLs")
+    except Exception as exc:
+        logger.warning(f"[UMA] Could not load skill icon URLs from skills.db: {exc}")
+
+
+def _find_cm_for_event(event: dict, cm_events: list[dict]) -> dict | None:
+    """
+    Match an event from the shared DB to a CM dict from uma.moe by
+    comparing start timestamps (closest match within 3 days wins).
+    """
+    event_start = event.get("start", 0)
+    best: dict | None = None
+    best_diff = float("inf")
+    for cm in cm_events:
+        diff = abs(cm.get("start_ts", 0) - event_start)
+        if diff < best_diff and diff < 86_400 * 3:
+            best_diff = diff
+            best = cm
+    return best
+
+
+async def _build_embed_with_skills(event: dict) -> discord.Embed:
+    """
+    Build the event embed.  For Champions Meeting events, appends a green
+    skills section (passive stat-boost skills that activate on that CM course).
+    """
+    embed = _build_embed(event)
+
+    if "champions meeting" not in event.get("title", "").lower():
+        return embed
+
+    try:
+        cm_events = await cm_module.fetch_cm_events()
+        cm = _find_cm_for_event(event, cm_events)
+        if not cm:
+            return embed
+
+        await _ensure_icon_urls()
+        green = cm_module.get_cm_green_skills(cm, _icon_urls)
+        if not green:
+            return embed
+
+        lines = []
+        for name, icon_url in green:
+            emoji = skills_module.skill_icon_emoji(icon_url) if icon_url else ""
+            lines.append(f"{emoji} {name}" if emoji else f"\u2022 {name}")
+
+        section = "\u2500" * 18 + "\n**Green Skills:**\n" + "\n".join(lines)
+        if embed.description:
+            embed.description += f"\n\n{section}"
+        else:
+            embed.description = section
+
+        # Discord embed descriptions cap at 4096 characters
+        if len(embed.description) > 4096:
+            embed.description = embed.description[:4090] + "\u2026"
+
+    except Exception as exc:
+        logger.warning(f"[UMA] Failed to build green skills section: {exc}")
+
+    return embed
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +176,7 @@ def _build_embed(event: dict) -> discord.Embed:
 
 
 async def _send_embed(channel: discord.TextChannel, event: dict) -> discord.Message:
-    embed = _build_embed(event)
+    embed = await _build_embed_with_skills(event)
     image = event.get("image")
     if image:
         if image.startswith("http"):
@@ -108,7 +191,7 @@ async def _send_embed(channel: discord.TextChannel, event: dict) -> discord.Mess
 
 
 async def _edit_message(msg: discord.Message, event: dict):
-    embed = _build_embed(event)
+    embed = await _build_embed_with_skills(event)
     image = event.get("image")
     if image:
         if image.startswith("http"):
