@@ -49,9 +49,12 @@ from discord import app_commands
 from global_config import (
     COURSE_DATA_JSON,
     COURSE_LABELS_JSON,
+    SKILL_DATA_JSON,
+    SKILL_NAMES_JSON,
     TRACK_NAMES_JSON,
     UMA_MOE_API_KEY,
 )
+from skill_chart import evaluate_trigger, _COND_RE, _GEO_FIELDS
 
 logger = logging.getLogger("cm_module")
 
@@ -83,13 +86,16 @@ _track_name_to_id: dict[str, int] = {}   # English name → raceTrackId
 _track_id_to_name: dict[int, str] = {}   # raceTrackId → English name
 _course_data: dict[str, dict]     = {}   # courseId str → uma-skill-tools entry
 _course_labels: dict[str, dict]   = {}   # courseId str → uma-tools entry (has 'course' field)
+_skill_data:  dict[str, dict]     = {}   # skillId str → uma-skill-tools entry
+_skill_names: dict[str, object]   = {}   # skillId str → [jp, en] or en string
 
 _local_loaded = False
 
 
 def load_local_data_if_needed() -> None:
     """Load JSON files from disk. Safe to call multiple times; no-op after first load."""
-    global _local_loaded, _track_name_to_id, _track_id_to_name, _course_data, _course_labels
+    global _local_loaded, _track_name_to_id, _track_id_to_name
+    global _course_data, _course_labels, _skill_data, _skill_names
     if _local_loaded:
         return
 
@@ -110,10 +116,19 @@ def load_local_data_if_needed() -> None:
         with open(COURSE_LABELS_JSON, encoding="utf-8") as f:
             _course_labels = json.load(f)
 
+    if os.path.exists(SKILL_DATA_JSON):
+        with open(SKILL_DATA_JSON, encoding="utf-8") as f:
+            _skill_data = json.load(f)
+
+    if os.path.exists(SKILL_NAMES_JSON):
+        with open(SKILL_NAMES_JSON, encoding="utf-8") as f:
+            _skill_names = json.load(f)
+
     _local_loaded = True
     logger.info(
         f"[CMModule] Local data: {len(_track_name_to_id)} tracks, "
-        f"{len(_course_data)} courses, {len(_course_labels)} course-labels"
+        f"{len(_course_data)} courses, {len(_course_labels)} course-labels, "
+        f"{len(_skill_data)} skills"
     )
 
 
@@ -463,3 +478,147 @@ def resolve_course(
         return cid, name
 
     return None, ""
+
+
+# ---------------------------------------------------------------------------
+# CM green-skill detection
+# ---------------------------------------------------------------------------
+
+# Effect types that are passive stat-boost "green" skills (Speed/Stamina/
+# Power/Guts/Wisdom).  Excludes HP Recovery (9), speed bursts (21/22/27),
+# and Acceleration (31).
+_GREEN_EFFECT_TYPES = {1, 2, 3, 4, 5}
+
+# Condition fields considered "CM-fixed" — they're pre-set by the CM schedule
+# just like track ID or rotation, so they're valid for the geo-only filter.
+_CM_CONDITION_FIELDS = _GEO_FIELDS | {"season", "ground_condition", "weather"}
+
+# Mapping from uma.moe event strings → numeric values used in skill conditions
+_SEASON_MAP      = {"Spring": 1, "Summer": 2, "Autumn": 3, "Fall": 3, "Winter": 4}
+_WEATHER_MAP     = {"Sunny": 1, "Cloudy": 2, "Rainy": 3, "Snow": 4}
+_GROUND_COND_MAP = {"Firm": 1, "Good": 2, "Slightly Soft": 3, "Soft": 3, "Heavy": 4}
+
+_TIER_RE = re.compile(r"\s+[◎○×]\s*$")
+
+
+def _is_green_skill(effects: list) -> bool:
+    relevant = [e for e in effects if e.get("target", 1) in (1, 2)]
+    return bool(relevant) and all(e.get("type") in _GREEN_EFFECT_TYPES for e in relevant)
+
+
+def _is_cm_geo_only(condition: str, precondition: str) -> bool:
+    combined = (condition or "") + ("&" + precondition if precondition else "")
+    tokens = [m.group(1) for m in _COND_RE.finditer(combined)]
+    return bool(tokens) and all(t in _CM_CONDITION_FIELDS for t in tokens)
+
+
+def _cmp_op(a: int, op: str, b: int) -> bool:
+    return {"==": a == b, "!=": a != b, ">=": a >= b,
+            "<=": a <= b, ">": a > b, "<": a < b}.get(op, False)
+
+
+def _cm_fixed_val(field: str, cm: dict) -> int | None:
+    if field == "season":           return _SEASON_MAP.get(cm.get("season", ""))
+    if field == "ground_condition": return _GROUND_COND_MAP.get(cm.get("ground", ""))
+    if field == "weather":          return _WEATHER_MAP.get(cm.get("weather", ""))
+    return None
+
+
+def _matches_cm_conditions(cond: str, precond: str, cm: dict) -> bool:
+    combined = (cond or "") + ("&" + precond if precond else "")
+    groups = combined.split("@") if combined else [""]
+    for group in groups:
+        ok = True
+        for m in _COND_RE.finditer(group):
+            field, op, raw = m.group(1), m.group(2), m.group(3)
+            if field in _GEO_FIELDS:
+                continue
+            val = _cm_fixed_val(field, cm)
+            if val is None:
+                continue
+            if not _cmp_op(val, op, int(float(raw))):
+                ok = False
+                break
+        if ok:
+            return True
+    return False
+
+
+def _skill_tier_rank(name: str) -> int:
+    """○ = 0 (preferred 'first level'), × = 1, bare name = 2, ◎ = 3, enhanced = 4."""
+    if name.endswith("○"): return 0
+    if name.endswith("×"): return 1
+    if not _TIER_RE.search(name): return 2
+    if name.endswith("◎"): return 3
+    return 4
+
+
+def _en_skill_name(sid: str) -> str:
+    raw = _skill_names.get(sid, "")
+    return (raw[0] if isinstance(raw, list) else str(raw)) or f"Skill {sid}"
+
+
+def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[str, str]]:
+    """
+    Return ``(skill_name, icon_url_or_empty)`` pairs for passive stat-boost
+    (green) skills that activate on the given CM's course.
+
+    Skills are filtered to geo/CM-fixed conditions only (no running style,
+    order, mood, etc.), deduplicated to one representative per ID-family
+    (○ tier preferred), and sorted alphabetically.
+
+    ``icon_urls`` should be ``{skill_id_str: icon_url}`` (from skills.db).
+    """
+    load_local_data_if_needed()
+
+    course_id = _cm_course_id(cm)
+    if not course_id:
+        return []
+    course_entry = _course_data.get(str(course_id))
+    if not course_entry:
+        return []
+
+    icon_map = icon_urls or {}
+    raw: list[tuple[str, str, str]] = []   # (name, icon_url, sid)
+
+    for sid, entry in _skill_data.items():
+        if not (sid.startswith("2") or sid.startswith("3")):
+            continue
+        alts = entry.get("alternatives", [])
+        if not alts:
+            continue
+        alt     = alts[0]
+        cond    = alt.get("condition",    "")
+        precond = alt.get("precondition", "")
+        effects = alt.get("effects", [])
+
+        if not _is_green_skill(effects):
+            continue
+        if not _is_cm_geo_only(cond, precond):
+            continue
+        if not _matches_cm_conditions(cond, precond, cm):
+            continue
+        if not evaluate_trigger(cond, precond, course_entry):
+            continue
+
+        name = _en_skill_name(sid)
+        if name == f"Skill {sid}":
+            continue
+
+        raw.append((name, icon_map.get(sid, ""), sid))
+
+    # Deduplicate: group by sid//10 (same skill family), keep ○ tier
+    groups: dict[int, list[tuple[str, str, str]]] = {}
+    for name, icon_url, sid in raw:
+        try:
+            fam = int(sid) // 10
+        except ValueError:
+            fam = hash(sid)
+        groups.setdefault(fam, []).append((name, icon_url, sid))
+
+    result: list[tuple[str, str]] = []
+    for fam_skills in groups.values():
+        best = min(fam_skills, key=lambda x: _skill_tier_rank(x[0]))
+        result.append((best[0], best[1]))
+
+    return sorted(result, key=lambda x: x[0].lower())
