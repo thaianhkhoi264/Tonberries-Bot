@@ -173,7 +173,10 @@ def _build_embed(event: dict) -> discord.Embed:
     color = get_event_color(event)
     description = f"**Start:** <t:{event['start']}:F>\n**End:** <t:{event['end']}:F>"
     if event.get("description"):
-        description += f"\n\n{event['description']}"
+        desc_text = event["description"]
+        if "champions meeting" in event.get("title", "").lower():
+            desc_text = cm_module.apply_display_fixes(desc_text)
+        description += f"\n\n{desc_text}"
     embed = discord.Embed(title=event["title"], description=description, color=color)
     return embed
 
