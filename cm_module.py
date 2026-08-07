@@ -73,6 +73,13 @@ def display(v: str) -> str:
     return _DISPLAY.get(v, v)
 
 
+def apply_display_fixes(text: str) -> str:
+    """Replace all raw API values in *text* with their display equivalents."""
+    for raw, mapped in _DISPLAY.items():
+        text = text.replace(raw, mapped)
+    return text
+
+
 # Venue name variants across data sources
 _VENUE_ALIASES: dict[str, str] = {
     "Oi":  "Ooi",
