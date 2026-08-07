@@ -592,6 +592,10 @@ def get_cm_green_skills(cm: dict, icon_urls: dict | None = None) -> list[tuple[s
         precond = alt.get("precondition", "")
         effects = alt.get("effects", [])
 
+        # Rarity 1 = character-specific scenario skills (e.g. ♡ 3D Nail Art).
+        # Only rarity 2 (○) and 3 (◎) are generally trainable/inheritable.
+        if entry.get("rarity", 0) < 2:
+            continue
         if not _is_green_skill(effects):
             continue
         if not _is_cm_geo_only(cond, precond):
