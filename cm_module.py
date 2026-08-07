@@ -602,10 +602,11 @@ def get_cm_green_skills(
     Return skill families (passive stat-boost / green) that activate on the
     given CM's course.
 
-    Each item in the returned list is a **family** — a list of
-    ``(skill_name, icon_url)`` tuples ordered by icon-stem Y value
-    (Y=1 first, then Y=2, then Y=6).  Families are sorted alphabetically
-    by the name of their first member.
+    Each item in the returned list is a **family** — up to two
+    ``(skill_name, icon_url)`` tuples: the Y=1 base version (○) first,
+    followed by the Y=2 gold/enhanced version if one exists.  Y=6 entries
+    are omitted.  Families are sorted alphabetically by the first member's
+    name.
 
     Only skills whose icon URL matches the whitelist (``100XY`` where
     X∈{1–6} and Y∈{1,2,6}, plus exceptions ``20181`` and ``40012``) are
@@ -655,19 +656,33 @@ def get_cm_green_skills(
 
         raw.append((name, icon_url, sid))
 
-    # Group by sid // 10 (same skill family); sort each group by icon Y value.
-    groups: dict[int, list[tuple[str, str, str]]] = {}
+    # Group by (family, Y value); pick best representative per Y slot.
+    # Only Y=1 (base/○) and Y=2 (gold/enhanced) are shown; Y=6 is skipped.
+    # Within each Y slot, prefer lower _skill_tier_rank (○ > ◎ > bare name).
+    Slot = tuple[str, str]  # (name, icon_url)
+    fam_y: dict[int, dict[int, Slot]] = {}   # fam_id → {y_val → best}
+
     for name, icon_url, sid in raw:
+        y = _icon_y_value(icon_url)
+        if y not in (1, 2):
+            continue
         try:
             fam = int(sid) // 10
         except ValueError:
             fam = hash(sid)
-        groups.setdefault(fam, []).append((name, icon_url, sid))
+        bucket = fam_y.setdefault(fam, {})
+        existing = bucket.get(y)
+        if existing is None or _skill_tier_rank(name) < _skill_tier_rank(existing[0]):
+            bucket[y] = (name, icon_url)
 
     result: list[list[tuple[str, str]]] = []
-    for fam_skills in groups.values():
-        fam_skills.sort(key=lambda x: _icon_y_value(x[1]))
-        result.append([(name, icon_url) for name, icon_url, _ in fam_skills])
+    for bucket in fam_y.values():
+        family: list[tuple[str, str]] = []
+        for y in (1, 2):
+            if y in bucket:
+                family.append(bucket[y])
+        if family:
+            result.append(family)
 
     # Sort families alphabetically by the first member's name.
     result.sort(key=lambda fam: fam[0][0].lower())
