@@ -313,6 +313,7 @@ def _build_chart_embed(
     alt_index: int = 0,
     course_entry: dict | None = None,
     is_inherited: bool = False,
+    character_name: str | None = None,
 ) -> discord.Embed:
     """Build a rich embed with condition blocks, effect summary, and optional chart."""
     alts   = entry.get("alternatives", [])
@@ -383,6 +384,8 @@ def _build_chart_embed(
     )
     if gt and gt.get("icon_url"):
         embed.set_thumbnail(url=gt["icon_url"])
+    if character_name:
+        embed.add_field(name="Character", value=character_name, inline=False)
     if course_id:
         embed.set_image(url="attachment://skill_chart.png")
     if course_display:
@@ -545,12 +548,14 @@ async def handle_skill_interaction(
         all_same_geo = False
 
     # --- Build and send embed ---
+    character_name = (gt.get("character_name") or None) if (is_inherited and gt) else None
     embed = _build_chart_embed(
         skill_id, en_name, entry, gt,
         course_id, course_display,
         all_same_geo, alt_index,
         course_entry=course_entry_for_embed,
         is_inherited=is_inherited,
+        character_name=character_name,
     )
 
     if chart_bytes:
