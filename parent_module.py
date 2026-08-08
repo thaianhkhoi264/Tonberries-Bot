@@ -604,18 +604,6 @@ def _build_style_embed(style: str, sections: dict[str, list[dict]]) -> discord.E
                 parts.append("")
             parts.append("**Speed Carryover**")
             parts.extend(_skill_line(sk) for sk in sc)
-        if velocity:
-            if parts:
-                parts.append("")
-            parts.append("**Mid-Race Velocity**")
-            parts.append("-# Conditions not factored in; raw modifiers only")
-            parts.extend(_skill_line(sk) for sk in velocity)
-        if lsv:
-            if parts:
-                parts.append("")
-            parts.append("**Last Spurt Velocity**")
-            parts.append("-# Conditions not factored in; raw modifiers only")
-            parts.extend(_skill_line(sk) for sk in lsv)
         desc = "\n".join(parts)
 
     if len(desc) > _MAX_EMBED_CHARS:
@@ -745,7 +733,7 @@ async def handle_parent_interaction(
     embeds = [_build_style_embed(style, style_skills[style]) for style in DISPLAY_STYLES]
 
     # Send — first followup gets the header content + first batch of embeds
-    header = f"## CM\u202f#{cm_num} \u2014 {course_display}\n*Good inherited skills by running style*"
+    header = f"## CM\u202f#{cm_num} \u2014 {course_display}\n*Good inherited skills by running style*\n Prioritize Accel skills over velocity, unless you already have good gold accels"
 
     # Batch respecting Discord limits (10 embeds / 6000 total chars per message)
     batches: list[list[discord.Embed]] = []
