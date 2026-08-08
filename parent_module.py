@@ -243,20 +243,14 @@ def _build_char_name_to_id(char_names: list[str], jp_db_path: str) -> dict[str, 
 # Weekly background task — refresh GT global character list
 # ---------------------------------------------------------------------------
 
-@tasks.loop(hours=168)
+@tasks.loop(hours=72)
 async def _refresh_chars_task() -> None:
-    try:
-        from scrape_global_chars import scrape_visible_characters
-        chars = await scrape_visible_characters()
-        payload = {"scraped_at": int(time.time()), "characters": chars}
-        os.makedirs(os.path.dirname(GT_GLOBAL_CHARS_JSON) or ".", exist_ok=True)
-        with open(GT_GLOBAL_CHARS_JSON, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        global _base_char_ids
-        _base_char_ids = {c["id"] for c in chars}
-        logger.info(f"[Parent] Weekly GT chars refresh: {len(_base_char_ids)} characters")
-    except Exception as exc:
-        logger.error(f"[Parent] Weekly GT chars refresh failed: {exc}")
+    """Reload _base_char_ids from the JSON file written by the cron job."""
+    global _base_char_ids
+    new_ids = _load_gt_global_char_ids(GT_GLOBAL_CHARS_JSON)
+    if new_ids:
+        _base_char_ids = new_ids
+        logger.info(f"[Parent] Reloaded {len(_base_char_ids)} GT global chars from file")
 
 
 async def start_background_tasks() -> None:
