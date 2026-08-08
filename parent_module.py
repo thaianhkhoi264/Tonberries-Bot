@@ -262,6 +262,27 @@ async def _refresh_chars_task() -> None:
 async def start_background_tasks() -> None:
     _refresh_chars_task.start()
 
+
+async def refresh_char_ids() -> str:
+    """
+    Manually trigger a GT global character scrape and reload _base_char_ids.
+    Returns a status string suitable for sending as a Discord message.
+    """
+    global _base_char_ids
+    try:
+        from tests.scrape_global_chars import scrape_visible_characters
+        chars = await scrape_visible_characters()
+        payload = {"scraped_at": int(time.time()), "characters": chars}
+        os.makedirs(os.path.dirname(GT_GLOBAL_CHARS_JSON) or ".", exist_ok=True)
+        with open(GT_GLOBAL_CHARS_JSON, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        _base_char_ids = {c["id"] for c in chars}
+        logger.info(f"[Parent] Manual GT chars refresh: {len(_base_char_ids)} characters")
+        return f"GT global character list refreshed: {len(chars)} characters loaded."
+    except Exception as exc:
+        logger.error(f"[Parent] Manual GT chars refresh failed: {exc}")
+        return f"GT global character refresh failed: {exc}"
+
 # ---------------------------------------------------------------------------
 # Running-style classifier
 # ---------------------------------------------------------------------------
