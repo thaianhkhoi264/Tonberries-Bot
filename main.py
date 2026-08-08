@@ -14,6 +14,7 @@ import autotrain_module
 import lookup_module
 import skill_sync
 import cm_module
+import parent_module
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +63,22 @@ async def _slash_skill_length_autocomplete(
     return await cm_module.autocomplete_length(interaction, current, course_value)
 
 
+@bot.tree.command(name="parent", description="Show recommended inherited skills for a CM")
+@app_commands.describe(cm="CM number (defaults to active/next CM)")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def _slash_parent(interaction: discord.Interaction, cm: str | None = None):
+    await parent_module.handle_parent_interaction(interaction, cm)
+
+
+@_slash_parent.autocomplete("cm")
+async def _slash_parent_cm_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await parent_module.autocomplete_cm(interaction, current)
+
+
 @bot.tree.command(name="whenis", description="Look up when a support card or character will appear on a banner")
 @app_commands.describe(name="Character or support card name")
 @app_commands.allowed_installs(guilds=True, users=True)
@@ -101,6 +118,8 @@ async def on_ready():
     await skill_sync.sync_if_stale(bot)
     cm_module.load_local_data_if_needed()
     skills_module.load_uma_data()
+    parent_module.load_parent_data()
+    await parent_module.start_background_tasks()
     await _send_restart_dm()
 
 

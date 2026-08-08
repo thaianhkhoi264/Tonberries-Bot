@@ -31,6 +31,9 @@ get_course_entry(course_id) -> dict | None
 get_active_cm() -> dict | None
 get_next_cm() -> dict | None
     Return the currently running or next upcoming CM, from the cached list.
+
+get_eligible_card_ids(before_ts) -> set[str]
+    Return pickup_card_ids from character_banner events released before before_ts.
 """
 from __future__ import annotations
 
@@ -150,8 +153,9 @@ def get_course_entry(course_id: int) -> dict | None:
 _UMA_MOE_TIMELINE = "https://uma.moe/resources/current/banner_timeline.json.gz"
 _CM_CACHE_TTL     = 3600  # seconds
 
-_cm_events:   list[dict] = []
-_cm_cache_ts: float      = 0.0
+_cm_events:    list[dict] = []
+_cm_cache_ts:  float      = 0.0
+_char_banners: list[dict] = []   # [{ts: int, card_ids: list[str]}, ...] from character_banner events
 
 
 def _parse_ts(s: str) -> int:
@@ -227,7 +231,7 @@ async def fetch_cm_events() -> list[dict]:
     Returns a list of parsed CM dicts sorted by CM number.
     Result is cached for _CM_CACHE_TTL seconds.
     """
-    global _cm_events, _cm_cache_ts
+    global _cm_events, _cm_cache_ts, _char_banners
 
     now = time.time()
     if _cm_events and (now - _cm_cache_ts) < _CM_CACHE_TTL:
@@ -249,17 +253,28 @@ async def fetch_cm_events() -> list[dict]:
             data = json.loads(raw.decode("utf-8"))
 
         parsed = []
+        char_banners = []
         for ev in data.get("events", []):
-            if ev.get("type") != "champions_meeting":
-                continue
-            cm = _parse_cm_event(ev)
-            if cm:
-                parsed.append(cm)
+            ev_type = ev.get("type", "")
+            if ev_type == "champions_meeting":
+                cm = _parse_cm_event(ev)
+                if cm:
+                    parsed.append(cm)
+            elif ev_type == "character_banner":
+                ts = _parse_ts(ev.get("global_release_date", ""))
+                if ts:
+                    card_ids = [str(c) for c in ev.get("pickup_card_ids", []) if c]
+                    if card_ids:
+                        char_banners.append({"ts": ts, "card_ids": card_ids})
 
         parsed.sort(key=lambda c: c["number"])
         _cm_events = parsed
+        _char_banners = char_banners
         _cm_cache_ts = now
-        logger.info(f"[CMModule] Loaded {len(parsed)} CM events from uma.moe")
+        logger.info(
+            f"[CMModule] Loaded {len(parsed)} CM events, "
+            f"{len(char_banners)} character banner events from uma.moe"
+        )
 
     except Exception as exc:
         logger.error(f"[CMModule] Failed to fetch CM timeline: {exc}")
@@ -371,6 +386,21 @@ def get_next_cm() -> dict | None:
     now = time.time()
     upcoming = [c for c in _cm_events if c["start_ts"] and c["start_ts"] > now]
     return min(upcoming, key=lambda c: c["start_ts"]) if upcoming else None
+
+
+def get_eligible_card_ids(before_ts: float) -> set[str]:
+    """
+    Return the set of card IDs (pickup_card_ids strings) from character_banner
+    timeline events whose global_release_date is strictly before *before_ts*.
+
+    Returns an empty set if no banner data is available (caller should treat
+    an empty result as "data unavailable" and skip the filter).
+    """
+    result: set[str] = set()
+    for banner in _char_banners:
+        if banner["ts"] < before_ts:
+            result.update(banner["card_ids"])
+    return result
 
 
 # ---------------------------------------------------------------------------

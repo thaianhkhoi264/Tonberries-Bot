@@ -578,6 +578,15 @@ _ETYPE = {
 }
 _STAT_T = {1, 2, 3, 4, 5}
 
+def _ordinal(n: int) -> str:
+    """Return ordinal string for n (1→'1st', 2→'2nd', 3→'3rd', 4→'4th', 11→'11th')."""
+    n = int(n)
+    suffix = "th"
+    if n % 100 not in (11, 12, 13):
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def _extract_verdict_state(condition: str) -> list[str]:
     """
     Return natural-language notes for notable runtime state conditions in all OR groups.
@@ -606,35 +615,69 @@ def _extract_verdict_state(condition: str) -> list[str]:
     atoms = all_atoms[0]
     notes: list[str] = []
 
-    # order_rate — percentage-based position
-    if "order_rate" in common_fields:
-        ge_val = next((v for op, v in atoms["order_rate"] if op == ">="), None)
-        le_val = next((v for op, v in atoms["order_rate"] if op == "<="), None)
-        if ge_val is not None and le_val is not None:
-            lo = math.ceil(ge_val / 100.0 * CM_HORSES)
-            hi = math.floor(le_val / 100.0 * CM_HORSES)
-            if lo == hi:
-                notes.append(f"{lo}th (CM)")
-            else:
-                notes.append(f"{lo}th\u2013{hi}th (CM)")
-        elif le_val is not None:
-            notes.append(f"top {max(1, math.floor(le_val / 100.0 * CM_HORSES))} (CM)")
-        elif ge_val is not None:
-            notes.append(f"{math.ceil(ge_val / 100.0 * CM_HORSES)}th+ (CM)")
+    # ── Position fields (order_rate and order, combined when both present) ────
+    has_rate = "order_rate" in common_fields
+    has_ord  = "order"      in common_fields
 
-    # order — absolute race position
-    if "order" in common_fields:
-        ge_o = next((v for op, v in atoms["order"] if op == ">="), None)
-        le_o = next((v for op, v in atoms["order"] if op == "<="), None)
-        eq_o = next((v for op, v in atoms["order"] if op == "=="), None)
-        if eq_o is not None:
-            notes.append("1st place" if int(eq_o) == 1 else f"{int(eq_o)}th place")
-        elif ge_o is not None and le_o is not None:
-            notes.append(f"{int(ge_o)}th\u2013{int(le_o)}th")
-        elif le_o is not None:
-            notes.append(f"top {int(le_o)}")
-        elif ge_o is not None:
-            notes.append(f"{int(ge_o)}th or below")
+    if has_rate or has_ord:
+        rate_ge = rate_le = None
+        if has_rate:
+            rate_ge = next((v for op, v in atoms["order_rate"] if op == ">="), None)
+            rate_le = next((v for op, v in atoms["order_rate"] if op == "<="), None)
+
+        ord_ge = ord_le = ord_eq = None
+        if has_ord:
+            ord_ge = next((v for op, v in atoms["order"] if op == ">="), None)
+            ord_le = next((v for op, v in atoms["order"] if op == "<="), None)
+            ord_eq = next((v for op, v in atoms["order"] if op == "=="), None)
+
+        # Combine: order>=X (absolute lower) + order_rate<=Y (% upper)
+        if (has_rate and has_ord
+                and rate_le is not None and rate_ge is None
+                and ord_ge  is not None and ord_le  is None and ord_eq is None):
+            hi = math.floor(rate_le / 100.0 * CM_HORSES)
+            lo = int(ord_ge)
+            if lo == hi:
+                notes.append(f"in {_ordinal(lo)}")
+            else:
+                notes.append(f"{_ordinal(lo)}\u2013{_ordinal(hi)}")
+
+        # Combine: order_rate>=X (% lower) + order<=Y (absolute upper)
+        elif (has_rate and has_ord
+                and rate_ge is not None and rate_le is None
+                and ord_le  is not None and ord_ge  is None and ord_eq is None):
+            lo = math.ceil(rate_ge / 100.0 * CM_HORSES)
+            hi = int(ord_le)
+            if lo == hi:
+                notes.append(f"in {_ordinal(lo)}")
+            else:
+                notes.append(f"{_ordinal(lo)}\u2013{_ordinal(hi)}")
+
+        else:
+            # Handle each field independently
+            if has_rate:
+                if rate_ge is not None and rate_le is not None:
+                    lo = math.ceil(rate_ge / 100.0 * CM_HORSES)
+                    hi = math.floor(rate_le / 100.0 * CM_HORSES)
+                    if lo == hi:
+                        notes.append(f"{_ordinal(lo)} (CM)")
+                    else:
+                        notes.append(f"{_ordinal(lo)}\u2013{_ordinal(hi)} (CM)")
+                elif rate_le is not None:
+                    notes.append(f"top {max(1, math.floor(rate_le / 100.0 * CM_HORSES))} (CM)")
+                elif rate_ge is not None:
+                    notes.append(f"{_ordinal(math.ceil(rate_ge / 100.0 * CM_HORSES))}+ (CM)")
+
+            if has_ord:
+                if ord_eq is not None:
+                    n = int(ord_eq)
+                    notes.append("1st place" if n == 1 else f"{_ordinal(n)} place")
+                elif ord_ge is not None and ord_le is not None:
+                    notes.append(f"{_ordinal(int(ord_ge))}\u2013{_ordinal(int(ord_le))}")
+                elif ord_le is not None:
+                    notes.append(f"top {int(ord_le)}")
+                elif ord_ge is not None:
+                    notes.append(f"{_ordinal(int(ord_ge))} or below")
 
     # temptation_count == 0
     if "temptation_count" in common_fields:
