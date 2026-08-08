@@ -246,7 +246,7 @@ def _build_char_name_to_id(char_names: list[str], jp_db_path: str) -> dict[str, 
 @tasks.loop(hours=168)
 async def _refresh_chars_task() -> None:
     try:
-        from tests.scrape_global_chars import scrape_visible_characters
+        from scrape_global_chars import scrape_visible_characters
         chars = await scrape_visible_characters()
         payload = {"scraped_at": int(time.time()), "characters": chars}
         os.makedirs(os.path.dirname(GT_GLOBAL_CHARS_JSON) or ".", exist_ok=True)
@@ -270,7 +270,7 @@ async def refresh_char_ids() -> str:
     """
     global _base_char_ids
     try:
-        from tests.scrape_global_chars import scrape_visible_characters
+        from scrape_global_chars import scrape_visible_characters
         chars = await scrape_visible_characters()
         payload = {"scraped_at": int(time.time()), "characters": chars}
         os.makedirs(os.path.dirname(GT_GLOBAL_CHARS_JSON) or ".", exist_ok=True)
