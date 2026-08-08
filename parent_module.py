@@ -95,7 +95,7 @@ _LATE_RACE_FIELDS = frozenset({
     "is_lastspurt",
 })
 
-_EMPTY_EMOJI      = "<a:1320376461517131776:1535215534730387506>"
+_EMPTY_EMOJI_URL  = "https://cdn.discordapp.com/emojis/1535215534730387506.gif"
 _MAX_EMBED_CHARS  = 4096
 _MAX_TOTAL_CHARS  = 6000
 _MAX_EMBEDS_PER_MSG = 10
@@ -609,7 +609,9 @@ def _build_style_embed(style: str, sections: dict[str, list[dict]]) -> discord.E
     has_any = accel or sc or velocity or lsv
 
     if not has_any:
-        desc = f"{_EMPTY_EMOJI}"
+        embed = discord.Embed(title=STYLE_NAME[style], colour=STYLE_COLOR[style])
+        embed.set_image(url=_EMPTY_EMOJI_URL)
+        return embed
     else:
         parts: list[str] = []
         if accel:
