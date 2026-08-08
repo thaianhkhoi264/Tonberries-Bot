@@ -198,6 +198,8 @@ async def on_message(message: discord.Message):
         await _cmd_fancount(message)
     elif cmd_lower.startswith("fancount "):
         await _cmd_fancount(message, cmd[len("fancount "):])
+    elif cmd_lower == "parent refresh":
+        await _cmd_parent_refresh(message)
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -223,6 +225,7 @@ async def _cmd_help(message: discord.Message):
         "`fancount` — Show current monthly fan requirement\n"
         "`fancount edit <number>` — Change the monthly fan requirement and refresh the channel\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
+        "`parent refresh` — Re-scrape the GT global character list\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -335,6 +338,16 @@ async def _cmd_circles(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Circles refresh failed: {exc}")
         await message.channel.send(f"Circle refresh failed: {exc}")
+
+
+async def _cmd_parent_refresh(message: discord.Message):
+    await message.channel.send("Scraping GT global character list (this may take ~30 seconds)…")
+    try:
+        result = await parent_module.refresh_char_ids()
+        await message.channel.send(result)
+    except Exception as exc:
+        logger.error(f"[Bot] Parent refresh failed: {exc}")
+        await message.channel.send(f"Parent refresh failed: {exc}")
 
 
 async def _cmd_skill_refresh(message: discord.Message):
