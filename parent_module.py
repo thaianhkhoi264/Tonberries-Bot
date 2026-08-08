@@ -640,16 +640,17 @@ async def autocomplete_cm(
     now = time.time()
     events = cm_module._cm_events
 
-    # Prioritise active/upcoming, then past — all in reverse number order for past
-    active   = [e for e in events if e.get("start_ts") and e.get("end_ts") and e["start_ts"] <= now <= e["end_ts"]]
-    upcoming = [e for e in events if e.get("start_ts") and e["start_ts"] > now]
+    # Mirror cm_module.autocomplete_course classification so no events slip through:
+    # upcoming = no end_ts (unknown) or end_ts still in the future
+    # past     = has end_ts and it's in the past (sorted newest-first)
+    upcoming = [e for e in events if not e["end_ts"] or e["end_ts"] > now]
     past     = sorted(
-        [e for e in events if not e.get("start_ts") or (e.get("end_ts") and e["end_ts"] < now)],
+        [e for e in events if e["end_ts"] and e["end_ts"] <= now],
         key=lambda e: e["number"],
         reverse=True,
     )
 
-    ordered = active + upcoming + past
+    ordered = upcoming + past
     choices: list[app_commands.Choice[str]] = []
     seen: set[int] = set()
 

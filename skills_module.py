@@ -548,7 +548,7 @@ async def handle_skill_interaction(
         all_same_geo = False
 
     # --- Build and send embed ---
-    character_name = (gt.get("character_name") or None) if (is_inherited and gt) else None
+    character_name = (gt.get("character_name") or None) if gt else None
     embed = _build_chart_embed(
         skill_id, en_name, entry, gt,
         course_id, course_display,
