@@ -591,12 +591,13 @@ def build_parent_skills(
 # Embed building
 # ---------------------------------------------------------------------------
 
-def _skill_line(item: dict) -> str:
+def _skill_line(item: dict, underline: bool = False) -> str:
     """Format one skill line with icon emoji, character name and verdict."""
     info = _char_info.get(item["sid"], ("", ""))
     char_part = f" ({info[0]})" if info[0] else ""
     icon = skills_module.skill_icon_emoji(info[1]) if info[1] else "•"
-    return f"{icon} {item['name']}{char_part}: {item['verdict']}"
+    name = f"__**{item['name']}**__" if underline else f"**{item['name']}**"
+    return f"{icon} {name}{char_part}: {item['verdict']}"
 
 
 def _build_style_embed(style: str, sections: dict[str, list[dict]]) -> discord.Embed:
@@ -613,7 +614,7 @@ def _build_style_embed(style: str, sections: dict[str, list[dict]]) -> discord.E
         parts: list[str] = []
         if accel:
             parts.append("**Accel**")
-            parts.extend(_skill_line(sk) for sk in accel)
+            parts.extend(_skill_line(sk, underline=True) for sk in accel)
         if sc:
             if parts:
                 parts.append("")
@@ -758,7 +759,7 @@ async def handle_parent_interaction(
     embeds = [_build_style_embed(style, style_skills[style]) for style in DISPLAY_STYLES]
 
     # Send — first followup gets the header content + first batch of embeds
-    header = f"## CM\u202f#{cm_num} \u2014 {course_display}\n-#*Good inherited skills by running style*\n-#*Prioritize Accel skills over velocity, unless you already have good gold accels*"
+    header = f"## CM\u202f#{cm_num} \u2014 {course_display}\n-# *Good inherited skills by running style*\n-# *Prioritize Accel skills over velocity, unless you already have good gold accels*"
 
     # Batch respecting Discord limits (10 embeds / 6000 total chars per message)
     batches: list[list[discord.Embed]] = []
