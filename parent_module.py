@@ -95,7 +95,7 @@ _LATE_RACE_FIELDS = frozenset({
     "is_lastspurt",
 })
 
-_EMPTY_EMOJI_URL  = "https://cdn.discordapp.com/emojis/1535215534730387506.gif"
+_EMPTY_EMOJI_URL  = "https://cdn.discordapp.com/emojis/1535215534730387506.webp?size=512&animated=true"
 _MAX_EMBED_CHARS  = 4096
 _MAX_TOTAL_CHARS  = 6000
 _MAX_EMBEDS_PER_MSG = 10
