@@ -761,7 +761,7 @@ async def handle_parent_interaction(
     embeds = [_build_style_embed(style, style_skills[style]) for style in DISPLAY_STYLES]
 
     # Send — first followup gets the header content + first batch of embeds
-    header = f"## CM\u202f#{cm_num} \u2014 {course_display}\n-# *Good inherited skills by running style*\n-# *Prioritize Accel skills over velocity, unless you already have good gold accels*"
+    header = f"## {course_display}\n-# *Good inherited skills by running style*\n-# *Prioritize Accel skills over velocity, unless you already have good gold accels*"
 
     # Batch respecting Discord limits (10 embeds / 6000 total chars per message)
     batches: list[list[discord.Embed]] = []
