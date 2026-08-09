@@ -76,11 +76,12 @@ STYLE_RANGES = {
 
 ALL_STYLES = (*STYLE_RANGES,)
 
-_BAD_LABELS    = ("Horrible", "Bad")
-_MIN_VEL_MOD   = 0.15
-_MIN_LSV_MOD   = 0.20
-_SC_PROXIMITY  = 50.0
-_SC_MAX_WIDTH  = 75.0
+_BAD_LABELS      = ("Horrible", "Bad")
+_MIN_VEL_MOD     = 0.15
+_MIN_LSV_MOD     = 0.20
+_ASSUMED_SPEED   = 20.0   # m/s assumed horse speed in midrace
+_SC_WIN_END_PROX = 150.0  # window end must be within this many metres of p2 (or past it)
+_SC_WIN_START_PROX = 200.0  # window start must be within this many metres of p2
 
 _OVERTAKE_FIELDS = frozenset({
     "is_overtake",
@@ -396,12 +397,47 @@ def _requires_top5(condition: str, n: int = 5) -> bool:
     return True
 
 
-def _fires_near_p2(regions: list, p2: float, proximity: float = 50.0, max_width: float = 75.0) -> bool:
+def _fires_as_speed_carryover(
+    regions: list,
+    p2: float,
+    duration_frames: int,
+) -> tuple[bool, bool]:
+    """
+    Returns (qualifies, inconsistent).
+
+    qualifies:    True if at least one region fires right before p2
+                  (within _SC_WIN_START_PROX) and the boost can still
+                  be active when the horse reaches p2.
+    inconsistent: True if EVERY qualifying region has an edge case —
+                  either the window starts before carry_start (could
+                  fire too early and expire before p2) or extends to/
+                  past p2 (could fire in late race instead).
+    """
+    d = duration_frames / 10000.0
+    if d <= 0:
+        return False, False
+
+    carry_start  = p2 - _ASSUMED_SPEED * d
+    any_qualifies    = False
+    all_inconsistent = True
+
     for r in regions:
-        if r[0] < p2 + proximity and r[1] > p2 - proximity:
-            if (r[1] - r[0]) <= max_width:
-                return True
-    return False
+        r0, r1 = r[0], r[1]
+        if r0 >= p2:
+            continue
+        if r1 < carry_start:
+            continue
+        if r1 < p2 - _SC_WIN_END_PROX:
+            continue
+        if r0 < p2 - _SC_WIN_START_PROX:
+            continue
+        any_qualifies = True
+        if r0 >= carry_start and r1 < p2:
+            all_inconsistent = False
+
+    if not any_qualifies:
+        return False, False
+    return True, all_inconsistent
 
 
 def _has_overtake_condition(combined: str) -> bool:
@@ -543,12 +579,21 @@ def build_parent_skills(
             efx    = format_effects(effects)
             suffix = " (unreliable)" if reliability == "can be unreliable" else ""
 
-            if reliability != "very unreliable" and _fires_near_p2(regions, p2, _SC_PROXIMITY, _SC_MAX_WIDTH):
+            bdur = int(best.get("baseDuration", 0))
+            sc_qualifies, sc_inconsistent = _fires_as_speed_carryover(regions, p2, bdur)
+
+            if reliability != "very unreliable" and sc_qualifies:
+                sc_tags = []
+                if sc_inconsistent:
+                    sc_tags.append("inconsistent")
+                if reliability == "can be unreliable":
+                    sc_tags.append("unreliable")
+                sc_suffix = (" (" + ", ".join(sc_tags) + ")") if sc_tags else ""
                 sc_styles = ALL_STYLES if styles == ["all"] else styles
                 for style in sc_styles:
                     if sid not in seen_in_style[style]:
                         out[style]["speed_carryover"].append(
-                            {"sid": sid, "name": name, "verdict": efx + suffix}
+                            {"sid": sid, "name": name, "verdict": efx + sc_suffix}
                         )
                         seen_in_style[style].add(sid)
 
