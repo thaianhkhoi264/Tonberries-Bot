@@ -555,8 +555,8 @@ def build_parent_skills(
             verdict = accel_verdict(cond, precond, effects, course_entry, is_inherited=True)
             if verdict and any(verdict.startswith(label) for label in _BAD_LABELS):
                 continue
-            if verdict and "very unreliable" in verdict:
-                continue
+            # if verdict and "very unreliable" in verdict:
+            #     continue
             if verdict and "can be unreliable" in verdict:
                 verdict = _strip_can_be_unreliable(verdict)
             efx     = format_effects(effects)
