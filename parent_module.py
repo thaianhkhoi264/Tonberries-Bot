@@ -293,6 +293,13 @@ def _parse_pos_range(chunk: str) -> tuple[int | None, int | None]:
     if ge_rate is not None or le_rate is not None:
         lo = math.ceil(ge_rate / 100.0 * NHORSE) if ge_rate is not None else 1
         hi = math.floor(le_rate / 100.0 * NHORSE) if le_rate is not None else NHORSE
+        # Tighten with any absolute order constraints (e.g. order>=4 raises lo)
+        for om in re.finditer(r"(?<!\w)order(>=|<=)(\d+)", chunk):
+            op2, val2 = om.group(1), int(om.group(2))
+            if op2 == ">=":
+                lo = max(lo, val2)
+            elif op2 == "<=":
+                hi = min(hi, val2)
         return lo, hi
 
     ge_pos = le_pos = eq_pos = None
