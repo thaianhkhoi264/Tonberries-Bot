@@ -345,9 +345,9 @@ def _vel_modifier(effects: list) -> float | None:
 # Reliability helpers
 # ---------------------------------------------------------------------------
 
-def _has_random_trigger(cond: str, precond: str) -> bool:
-    combined = cond + ("&" + precond if precond else "")
-    return any(m.group(1) in _RANDOM_FIELDS for m in _COND_RE.finditer(combined))
+def _has_random_trigger(cond: str, _precond: str) -> bool:
+    # Only check the activation condition — precondition is a pre-load gate, not the trigger
+    return any(m.group(1) in _RANDOM_FIELDS for m in _COND_RE.finditer(cond))
 
 
 def _reliability_label(cond: str, precond: str, regions: list, p2: float) -> str | None:

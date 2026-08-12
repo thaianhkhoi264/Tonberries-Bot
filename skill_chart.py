@@ -778,8 +778,8 @@ def accel_verdict(
         ]
 
     # ── 3. Reliability ─────────────────────────────────────────────────────
-    combined = condition + ("&" + precondition if precondition else "")
-    has_random = any(m.group(1) in _RANDOM_FIELDS for m in _COND_RE.finditer(combined))
+    # Only check the activation condition for randomness — precondition is a pre-load gate
+    has_random = any(m.group(1) in _RANDOM_FIELDS for m in _COND_RE.finditer(condition))
 
     # ── 4. Timing ──────────────────────────────────────────────────────────
     timing_note = ""
@@ -1224,7 +1224,7 @@ def build_skill_chart(
 
     # ---- 7.  Trigger overlay (alpha-composited) ----
     trigger_ranges = evaluate_trigger(condition, precondition, course)
-    is_imm = is_immediate_policy(condition + "&" + precondition)
+    is_imm = is_immediate_policy(condition)  # precondition is a pre-load gate, not the activation trigger
 
     ov  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ovd = ImageDraw.Draw(ov)
