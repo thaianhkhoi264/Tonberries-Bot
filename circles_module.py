@@ -56,10 +56,23 @@ UPDATE_HOUR_UTC = 16
 # then cleared so they only appear once.
 _pending_manual_hitlist_lines: list[str] = []
 
+# Names currently on the manual hitlist — shown at the top of the live hitlist embed.
+_manual_hitlist_names: set[str] = set()
+
 
 def add_manual_hitlist_line(line: str) -> None:
     """Queue a manual hitlist line for inclusion in the next daily report."""
     _pending_manual_hitlist_lines.append(line)
+
+
+def add_manual_hitlist_entry(name: str) -> None:
+    """Add a name to the live hitlist embed."""
+    _manual_hitlist_names.add(name)
+
+
+def remove_manual_hitlist_entry(name: str) -> None:
+    """Remove a name from the live hitlist embed."""
+    _manual_hitlist_names.discard(name)
 
 
 # ---------------------------------------------------------------------------
@@ -590,8 +603,10 @@ def _build_hitlist_embed(entries: list[dict]) -> discord.Embed:
         title=f"Dia's Hitlist {STATUS_EMOJIS['hitlist']}",
         colour=STATUS_COLORS["far_behind"],
     )
-    lines = _build_list_lines(entries)
-    embed.description = "\n".join(lines) if lines else "*Nobody here — great work!*"
+    manual_lines = [f"**{n}**" for n in sorted(_manual_hitlist_names)]
+    stat_lines   = _build_list_lines(entries)
+    all_lines    = manual_lines + stat_lines
+    embed.description = "\n".join(all_lines) if all_lines else "*Nobody here — great work!*"
     return embed
 
 

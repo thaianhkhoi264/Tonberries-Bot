@@ -446,7 +446,11 @@ async def _handle_guild_message(message: discord.Message) -> None:
         f"{circles_module.STATUS_EMOJIS['hitlist']} **{name}** added to Hitlist for **{reason_display}**"
     )
 
-    reply = f"{name} have been added to the Hitlist"
+    # Add to the live hitlist embed and refresh the channel display
+    circles_module.add_manual_hitlist_entry(name)
+    await circles_module.post_or_edit(force=True)
+
+    reply = f"**{name}** have been added to the Hitlist"
     if reason:
         reply += f" for {reason}"
     reply += "!"
@@ -456,6 +460,7 @@ async def _handle_guild_message(message: discord.Message) -> None:
 async def _remove_from_hitlist_after(name: str) -> None:
     await asyncio.sleep(86400)  # 24 hours
     _manual_hitlist.pop(name, None)
+    circles_module.remove_manual_hitlist_entry(name)
 
 
 # ---------------------------------------------------------------------------
