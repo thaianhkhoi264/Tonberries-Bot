@@ -447,7 +447,7 @@ async def _handle_guild_message(message: discord.Message) -> None:
     )
 
     # Add to the live hitlist embed and refresh the channel display
-    circles_module.add_manual_hitlist_entry(name)
+    circles_module.add_manual_hitlist_entry(name, reason)
     await circles_module.post_or_edit(force=True)
 
     reply = f"**{name}** have been added to the Hitlist"
