@@ -51,6 +51,16 @@ MAX_EMBEDS_PER_MESSAGE = 10
 # uma.moe refreshes ~15:10 UTC daily; we pull 1 h later to be safe
 UPDATE_HOUR_UTC = 16
 
+# Manual hitlist lines queued by the "Dia add X to the hitlist" guild command.
+# These are prepended to the "List Changes" section of the next daily report and
+# then cleared so they only appear once.
+_pending_manual_hitlist_lines: list[str] = []
+
+
+def add_manual_hitlist_line(line: str) -> None:
+    """Queue a manual hitlist line for inclusion in the next daily report."""
+    _pending_manual_hitlist_lines.append(line)
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -687,7 +697,8 @@ async def send_daily_report(
     curr_wl_names = {int(e["viewer_id"]): e["trainer_name"] for e in wl_entries if e["viewer_id"] is not None}
     curr_hl_names = {int(e["viewer_id"]): e["trainer_name"] for e in hl_entries if e["viewer_id"] is not None}
 
-    change_lines: list[str] = []
+    change_lines: list[str] = list(_pending_manual_hitlist_lines)
+    _pending_manual_hitlist_lines.clear()
     for vid in sorted(curr_hl_ids - prev_hl_ids, key=lambda v: curr_hl_names.get(v, "")):
         change_lines.append(f"{STATUS_EMOJIS['hitlist']} **{curr_hl_names[vid]}** added to Hitlist")
     for vid in sorted(prev_hl_ids - curr_hl_ids, key=lambda v: prev_hl_names.get(v, "")):
