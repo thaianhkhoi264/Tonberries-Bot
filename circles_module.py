@@ -57,7 +57,7 @@ UPDATE_HOUR_UTC = 16
 _pending_manual_hitlist_lines: list[str] = []
 
 # Names currently on the manual hitlist — shown at the top of the live hitlist embed.
-_manual_hitlist_names: set[str] = set()
+_manual_hitlist_names: dict[str, str | None] = {}
 
 
 def add_manual_hitlist_line(line: str) -> None:
@@ -65,14 +65,14 @@ def add_manual_hitlist_line(line: str) -> None:
     _pending_manual_hitlist_lines.append(line)
 
 
-def add_manual_hitlist_entry(name: str) -> None:
-    """Add a name to the live hitlist embed."""
-    _manual_hitlist_names.add(name)
+def add_manual_hitlist_entry(name: str, reason: str | None = None) -> None:
+    """Add a name (with optional reason) to the live hitlist embed."""
+    _manual_hitlist_names[name] = reason
 
 
 def remove_manual_hitlist_entry(name: str) -> None:
     """Remove a name from the live hitlist embed."""
-    _manual_hitlist_names.discard(name)
+    _manual_hitlist_names.pop(name, None)
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +603,10 @@ def _build_hitlist_embed(entries: list[dict]) -> discord.Embed:
         title=f"Dia's Hitlist {STATUS_EMOJIS['hitlist']}",
         colour=STATUS_COLORS["far_behind"],
     )
-    manual_lines = [f"**{n}**" for n in sorted(_manual_hitlist_names)]
+    manual_lines = [
+        f"**{n}**" + (f" — {r}" if r else "")
+        for n, r in sorted(_manual_hitlist_names.items())
+    ]
     stat_lines   = _build_list_lines(entries)
     all_lines    = manual_lines + stat_lines
     embed.description = "\n".join(all_lines) if all_lines else "*Nobody here — great work!*"
