@@ -3,6 +3,7 @@ import os
 # Tonberries-Bot Configuration
 
 OWNER_USER_IDS          = (680653908259110914, 0)  # Discord user IDs allowed to DM-command the bot
+MAIN_OWNER_ID           = 680653908259110914   # Primary owner — receives restart DMs, exclusive hitlist access
 MAIN_SERVER_ID          = 0  # Discord guild (server) ID for the Tonberries server
 
 ONGOING_CHANNEL_ID      = 0  # Channel for currently active UMA events

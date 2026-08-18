@@ -1,11 +1,13 @@
 import sys
 import asyncio
+import random
+import re
 
 import discord
 from discord import app_commands
 
 from bot import bot, token, logger
-from global_config import OWNER_USER_IDS
+from global_config import OWNER_USER_IDS, MAIN_OWNER_ID, MAIN_SERVER_ID
 import uma_module
 import notification_module
 import circles_module
@@ -15,6 +17,19 @@ import lookup_module
 import skill_sync
 import cm_module
 import parent_module
+
+
+# ---------------------------------------------------------------------------
+# Manual hitlist state
+# ---------------------------------------------------------------------------
+
+# name → active removal Task (cancelled and replaced if the same name is re-added)
+_manual_hitlist: dict[str, asyncio.Task] = {}
+
+_HITLIST_RE = re.compile(
+    r"^dia add (.+?) to the hitlist(?: for (.+))?$",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +149,7 @@ async def _send_restart_dm() -> None:
     except Exception:
         commit = "unavailable"
     try:
-        user = await bot.fetch_user(680653908259110914)
+        user = await bot.fetch_user(MAIN_OWNER_ID)
         await user.send(f"Bot restarted.\nLatest commit: `{commit}`")
     except Exception as exc:
         logger.error(f"[Bot] Failed to send restart DM: {exc}")
@@ -142,10 +157,11 @@ async def _send_restart_dm() -> None:
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Only handle DMs, never from bots
-    if message.guild is not None:
-        return
     if message.author.bot:
+        return
+
+    if message.guild is not None:
+        await _handle_guild_message(message)
         return
 
     cmd       = message.content.strip()
@@ -397,6 +413,49 @@ async def _cmd_restart(message: discord.Message):
         await message.channel.send(f"git pull failed: {exc}\nRestarting anyway…")
         logger.error(f"[Bot] git pull error: {exc}")
     subprocess.Popen(["sudo", "systemctl", "restart", "tonberries-bot"])
+
+
+# ---------------------------------------------------------------------------
+# Guild message handler
+# ---------------------------------------------------------------------------
+
+async def _handle_guild_message(message: discord.Message) -> None:
+    if message.guild.id != MAIN_SERVER_ID:
+        return
+
+    m = _HITLIST_RE.match(message.content.strip())
+    if m is None:
+        return
+
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send(random.choice(["No.", "Nope.", "Nuh Uh", "Don't even think about it.", "<a:diashake:1508662342060081253>"]))
+        return
+
+    name   = m.group(1).strip()
+    reason = m.group(2).strip() if m.group(2) else None
+
+    # Cancel existing removal task if the same name is re-added
+    existing = _manual_hitlist.get(name)
+    if existing and not existing.done():
+        existing.cancel()
+    _manual_hitlist[name] = asyncio.create_task(_remove_from_hitlist_after(name))
+
+    # Queue line for the next daily report
+    reason_display = reason if reason else "Treasoning"
+    circles_module.add_manual_hitlist_line(
+        f"{circles_module.STATUS_EMOJIS['hitlist']} **{name}** added to Hitlist for **{reason_display}**"
+    )
+
+    reply = f"{name} have been added to the Hitlist"
+    if reason:
+        reply += f" for {reason}"
+    reply += "!"
+    await message.channel.send(reply)
+
+
+async def _remove_from_hitlist_after(name: str) -> None:
+    await asyncio.sleep(86400)  # 24 hours
+    _manual_hitlist.pop(name, None)
 
 
 # ---------------------------------------------------------------------------
