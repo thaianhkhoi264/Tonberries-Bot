@@ -222,6 +222,8 @@ async def on_message(message: discord.Message):
         await _cmd_skill_refresh(message)
     elif cmd_lower.startswith("skill "):
         await skills_module.handle_skill_lookup(message, cmd[len("skill "):])
+    elif cmd_lower.startswith("send "):
+        await _cmd_send(message, cmd[len("send "):])
     # Unknown commands are silently ignored
 
 
@@ -396,6 +398,27 @@ async def _cmd_skill_sync(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Skill sync failed: {exc}")
         await message.channel.send(f"Skill sync failed: {exc}")
+
+
+async def _cmd_send(message: discord.Message, args: str) -> None:
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send("No.")
+        return
+    parts = args.split(" ", 1)
+    if len(parts) < 2:
+        await message.channel.send("Usage: `send [channel_id] [message]`")
+        return
+    try:
+        channel_id = int(parts[0])
+    except ValueError:
+        await message.channel.send(f"Invalid channel ID: `{parts[0]}`")
+        return
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        await message.channel.send(f"Channel `{channel_id}` not found.")
+        return
+    await channel.send(parts[1])
+    await message.channel.send(f"Sent to <#{channel_id}>.")
 
 
 async def _cmd_restart(message: discord.Message):
