@@ -15,12 +15,36 @@ from global_config import (
     ONGOING_CHANNEL_ID,
     UPCOMING_CHANNEL_ID,
     SKILLS_DB,
+    MAIN_OWNER_ID,
 )
 import notification_module
 import cm_module
 import skills_module
 
 _update_lock = asyncio.Lock()
+
+
+_FIX_LOG = "logs/channel_fixes.log"
+
+
+def _write_fix_log(lines: list[str]) -> None:
+    """Append a timestamped block to the channel-fix log file."""
+    os.makedirs("logs", exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    block = f"\n{'=' * 60}\n{ts}\n" + "\n".join(lines) + "\n"
+    try:
+        with open(_FIX_LOG, "a", encoding="utf-8") as f:
+            f.write(block)
+    except Exception as exc:
+        logger.error(f"[UMA] Failed to write fix log: {exc}")
+
+
+async def _dm_owner(text: str) -> None:
+    try:
+        user = await bot.fetch_user(MAIN_OWNER_ID)
+        await user.send(text)
+    except Exception as exc:
+        logger.error(f"[UMA] Failed to DM owner: {exc}")
 
 # Cache of {skill_id_str: icon_url} loaded from skills.db (populated once).
 _icon_urls: dict[str, str] = {}
@@ -288,7 +312,8 @@ async def upsert_event_message(channel: discord.TextChannel, event: dict,
 # ---------------------------------------------------------------------------
 
 async def clear_channel_messages(channel: discord.TextChannel, valid_ids: set):
-    deleted = 0
+    # Pass 1: identify messages to delete and capture their content before deleting
+    to_delete: list[tuple[discord.Message, str | None]] = []  # (message, event_id_or_None)
     async with aiosqlite.connect(LOCAL_DB) as conn:
         try:
             async for message in channel.history(limit=100):
@@ -300,31 +325,51 @@ async def clear_channel_messages(channel: discord.TextChannel, valid_ids: set):
                 ) as cursor:
                     db_row = await cursor.fetchone()
 
-                should_delete = False
-                if db_row:
-                    if db_row[0] not in valid_ids:
-                        should_delete = True
-                elif message.embeds:
-                    # Untracked bot embed — orphan from a previous run
-                    should_delete = True
-
-                if should_delete:
-                    try:
-                        await message.delete()
-                        deleted += 1
-                        if db_row:
-                            await conn.execute(
-                                "DELETE FROM event_messages WHERE message_id=?",
-                                (str(message.id),),
-                            )
-                    except discord.NotFound:
-                        pass
-            await conn.commit()
+                if db_row and db_row[0] not in valid_ids:
+                    to_delete.append((message, db_row[0]))
+                elif not db_row and message.embeds:
+                    to_delete.append((message, None))
         except discord.HTTPException as exc:
             logger.error(f"[UMA] clear_channel_messages error: {exc}")
+            return
 
-    if deleted:
-        logger.info(f"[UMA] Cleared {deleted} orphaned message(s) from #{channel.name}")
+    if not to_delete:
+        return
+
+    # Capture embed details before deleting
+    log_lines = [f"ORPHAN CLEANUP — #{channel.name} (id={channel.id})"]
+    for msg, ev_id in to_delete:
+        reason = f"event_id={ev_id} not in valid_ids" if ev_id else "untracked bot embed (no DB row)"
+        embed_title = msg.embeds[0].title if msg.embeds else "(no embed)"
+        embed_desc  = (msg.embeds[0].description or "")[:300] if msg.embeds else ""
+        log_lines.append(
+            f"  msg_id={msg.id}  reason={reason}\n"
+            f"    embed title: {embed_title}\n"
+            f"    embed desc:  {embed_desc!r}"
+        )
+
+    # Pass 2: delete and clean DB
+    deleted = 0
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        for msg, ev_id in to_delete:
+            try:
+                await msg.delete()
+                deleted += 1
+                if ev_id:
+                    await conn.execute(
+                        "DELETE FROM event_messages WHERE message_id=?",
+                        (str(msg.id),),
+                    )
+            except discord.NotFound:
+                pass
+        await conn.commit()
+
+    logger.info(f"[UMA] Cleared {deleted} orphaned message(s) from #{channel.name}")
+    _write_fix_log(log_lines)
+    await _dm_owner(
+        f"⚠️ **[UMA]** Deleted {deleted} orphaned message(s) from <#{channel.id}>. "
+        f"Details in `{_FIX_LOG}`."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +391,7 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
 
     actual_order  = [r[0] for r in actual]
     tracked_ids   = set(actual_order)
+    event_map     = {e["id"]: e for e in events_for_channel}
     desired_order = [e["id"] for e in events_for_channel if e["id"] in tracked_ids]
 
     if actual_order == desired_order:
@@ -357,6 +403,39 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
     to_repost  = desired_order[prefix_len:]
 
     logger.info(f"[UMA] #{channel.name} out of order — reposting {len(to_delete)} message(s)")
+
+    def _name(ev_id: str) -> str:
+        e = event_map.get(ev_id)
+        return e["name"] if e else ev_id
+
+    def _snowflake_ts(msg_id: str) -> str:
+        """Approximate UTC time a Discord message was created from its snowflake ID."""
+        try:
+            ts = ((int(msg_id) >> 22) + 1420070400000) / 1000
+            return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        except Exception:
+            return "?"
+
+    log_lines = [f"ORDER FIX — #{channel.name} (id={channel.id})  |  mismatch starts at index {prefix_len}"]
+    log_lines.append("  DB rows (actual order by message_id):")
+    for ev_id, msg_id in actual:
+        marker = "  ← MISMATCH" if ev_id in [r[0] for r in to_delete] else ""
+        log_lines.append(f"    event_id={ev_id}  msg_id={msg_id}  posted={_snowflake_ts(msg_id)}  name={_name(ev_id)}{marker}")
+    log_lines.append("  Desired order (from events list):")
+    for i, ev_id in enumerate(desired_order):
+        log_lines.append(f"    [{i}] event_id={ev_id}  name={_name(ev_id)}")
+    log_lines.append(f"  Will delete+repost: {[_name(r[0]) for r in to_delete]}")
+    log_lines.append("  Event start times (desired sort key):")
+    for e in events_for_channel:
+        if e["id"] in tracked_ids:
+            start = e.get("start") or e.get("start_time") or "?"
+            log_lines.append(f"    event_id={e['id']}  start={start}  name={e['name']}")
+
+    _write_fix_log(log_lines)
+    await _dm_owner(
+        f"⚠️ **[UMA]** <#{channel.id}> was out of order — reposting {len(to_delete)} message(s). "
+        f"Details in `{_FIX_LOG}`."
+    )
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         for ev_id, msg_id in to_delete:
@@ -372,7 +451,6 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
             )
             await conn.commit()
 
-    event_map = {e["id"]: e for e in events_for_channel}
     for ev_id in to_repost:
         if ev_id in event_map:
             await upsert_event_message(channel, event_map[ev_id], ev_id)
