@@ -406,7 +406,7 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
 
     def _name(ev_id: str) -> str:
         e = event_map.get(ev_id)
-        return e["name"] if e else ev_id
+        return e["title"] if e else ev_id
 
     def _snowflake_ts(msg_id: str) -> str:
         """Approximate UTC time a Discord message was created from its snowflake ID."""
@@ -429,7 +429,7 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
     for e in events_for_channel:
         if e["id"] in tracked_ids:
             start = e.get("start") or e.get("start_time") or "?"
-            log_lines.append(f"    event_id={e['id']}  start={start}  name={e['name']}")
+            log_lines.append(f"    event_id={e['id']}  start={start}  name={e['title']}")
 
     _write_fix_log(log_lines)
     await _dm_owner(
