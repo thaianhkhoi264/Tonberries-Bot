@@ -398,7 +398,12 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
         return
 
     # Only repost from the first mismatch onward
-    prefix_len = sum(1 for a, d in zip(actual_order, desired_order) if a == d)
+    prefix_len = 0
+    for a, d in zip(actual_order, desired_order):
+        if a == d:
+            prefix_len += 1
+        else:
+            break
     to_delete  = actual[prefix_len:]
     to_repost  = desired_order[prefix_len:]
 
