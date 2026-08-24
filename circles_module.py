@@ -810,6 +810,30 @@ async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
         await conn.execute("DELETE FROM circle_messages WHERE key=?", (key,))
 
 
+async def refresh_hitlist_embed() -> None:
+    """Re-edit only the hitlist embed using cached data — no API fetch needed."""
+    if not bot.is_ready():
+        return
+    channel = bot.get_channel(CIRCLE_CHANNEL_ID)
+    if not channel:
+        return
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        msg_id       = await _get(conn, "circle_hitlist_msg")
+        cur_hl_json  = await _get(conn, "circle_cur_hitlist")
+
+    if not msg_id:
+        return
+
+    full_hl: list[dict] = json.loads(cur_hl_json) if cur_hl_json else []
+    embed = _build_hitlist_embed(full_hl)
+
+    try:
+        msg = await channel.fetch_message(int(msg_id))
+        await msg.edit(content=None, embed=embed)
+    except (discord.NotFound, discord.HTTPException) as exc:
+        logger.warning(f"[Circles] refresh_hitlist_embed failed: {exc}")
+
+
 async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> bool:
     if not bot.is_ready():
         return
