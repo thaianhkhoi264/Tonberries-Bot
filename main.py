@@ -216,6 +216,8 @@ async def on_message(message: discord.Message):
         await _cmd_fancount(message, cmd[len("fancount "):])
     elif cmd_lower == "parent refresh":
         await _cmd_parent_refresh(message)
+    elif cmd_lower == "trainee refresh":
+        await _cmd_trainee_refresh(message)
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -244,6 +246,7 @@ async def _cmd_help(message: discord.Message):
         "`fancount edit <number>` — Change the monthly fan requirement and refresh the channel\n"
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
         "`parent refresh` — Re-scrape the GT global character list\n"
+        "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -366,6 +369,41 @@ async def _cmd_parent_refresh(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Parent refresh failed: {exc}")
         await message.channel.send(f"Parent refresh failed: {exc}")
+
+
+async def _cmd_trainee_refresh(message: discord.Message):
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send("No.")
+        return
+    await message.channel.send(
+        "Refreshing trainee data — umamusu.wiki scrape → Fandom gap-fill → image "
+        "normalize. This takes ~10 minutes; I'll post each stage."
+    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-u", "tests/build_trainee_data.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        tail: list[str] = []
+        assert proc.stdout is not None
+        async for raw in proc.stdout:
+            line = raw.decode(errors="replace").rstrip()
+            if not line:
+                continue
+            tail.append(line)
+            del tail[:-40]
+            if line.startswith("== "):
+                await message.channel.send(line[3:])
+        rc = await proc.wait()
+        if rc != 0:
+            err = "\n".join(tail[-25:])
+            await message.channel.send(
+                f"Trainee refresh failed (exit {rc}):\n```\n{err}\n```"
+            )
+    except Exception as exc:
+        logger.error(f"[Bot] Trainee refresh error: {exc}")
+        await message.channel.send(f"Trainee refresh error: {exc}")
 
 
 async def _cmd_skill_refresh(message: discord.Message):
