@@ -127,6 +127,22 @@ async def _slash_role_autocomplete(
     return await role_module.autocomplete_role(interaction, current)
 
 
+@bot.tree.command(name="removerole", description="Remove one of your character fan roles (Tonberries server only)")
+@app_commands.describe(character="Fan role to remove")
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+async def _slash_removerole(interaction: discord.Interaction, character: str):
+    await role_module.handle_removerole(interaction, character)
+
+
+@_slash_removerole.autocomplete("character")
+async def _slash_removerole_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await role_module.autocomplete_removerole(interaction, current)
+
+
 # ---------------------------------------------------------------------------
 # Bot events
 # ---------------------------------------------------------------------------
