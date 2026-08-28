@@ -57,7 +57,7 @@ STYLE_NAME = {
     "pace":  "Pace Chaser",
     "late":  "Late Surger",
     "end":   "End Closer",
-    "all":   "Generally Good",
+    "all":   "Last Spurt Velocity (For non-Fronts)",
 }
 STYLE_COLOR = {
     "front": 0x3498DB,
@@ -69,7 +69,7 @@ STYLE_COLOR = {
 
 STYLE_RANGES = {
     "front": (1, 2),
-    "pace":  (2, 4),
+    "pace":  (1, 4),   # lucky pace reaches 1st roughly 2/3 of the time
     "late":  (5, 8),
     "end":   (6, 9),
 }
@@ -79,6 +79,7 @@ ALL_STYLES = (*STYLE_RANGES,)
 _BAD_LABELS      = ("Horrible", "Bad")
 _MIN_VEL_MOD     = 0.15
 _MIN_LSV_MOD     = 0.20
+_LSV_MAX_ORDER   = 6      # last_spurt_velocity position cutoff (order_rate<=75-equivalent)
 _ASSUMED_SPEED   = 20.0   # m/s assumed horse speed in midrace
 _SC_WIN_END_PROX = 150.0  # window end must be within this many metres of p2 (or past it)
 _SC_WIN_START_PROX = 200.0  # window start must be within this many metres of p2
@@ -331,7 +332,11 @@ def _get_styles(condition: str, precondition: str) -> list[str]:
     lo, hi = _parse_pos_range(chunk)
     if lo is None:
         return ["all"]
-    styles = [s for s, (s_lo, s_hi) in STYLE_RANGES.items() if lo <= s_hi and hi >= s_lo]
+    styles = [
+        s for s, (s_lo, s_hi) in STYLE_RANGES.items()
+        if lo <= s_hi and hi >= s_lo
+        and not (s == "front" and lo > 1)  # "front" means 1st, not "in the top 2"
+    ]
     return styles or ["all"]
 
 # ---------------------------------------------------------------------------
@@ -408,17 +413,27 @@ def _fires_as_speed_carryover(
     regions: list,
     p2: float,
     duration_frames: int,
+    is_random: bool,
 ) -> tuple[bool, bool]:
     """
     Returns (qualifies, inconsistent).
 
-    qualifies:    True if at least one region fires right before p2
-                  (within _SC_WIN_START_PROX) and the boost can still
-                  be active when the horse reaches p2.
-    inconsistent: True if EVERY qualifying region has an edge case —
-                  either the window starts before carry_start (could
-                  fire too early and expire before p2) or extends to/
-                  past p2 (could fire in late race instead).
+    A region means something different depending on whether the trigger is
+    random:
+      - Random condition: the game could satisfy it at any frame within the
+        window, so where exactly it fires is genuinely unknown.
+        qualifies:    True if at least one region fires right before p2
+                      (within _SC_WIN_START_PROX) and the boost can still
+                      be active when the horse reaches p2.
+        inconsistent: True if EVERY qualifying region has an edge case —
+                      either the window starts before carry_start (could
+                      fire too early and expire before p2) or extends to/
+                      past p2 (could fire in late race instead).
+      - Deterministic condition (no _RANDOM_FIELDS token): the game checks
+        every frame, so it fires reliably at the window's start (r0) — no
+        ambiguity. Compute directly whether the boost survives from r0 to
+        p2; if it doesn't, the region simply doesn't qualify (not a
+        "maybe" — it's just not a carryover).
     """
     d = duration_frames / 10000.0
     if d <= 0:
@@ -438,9 +453,17 @@ def _fires_as_speed_carryover(
             continue
         if r0 < p2 - _SC_WIN_START_PROX:
             continue
-        any_qualifies = True
-        if r0 >= carry_start and r1 < p2:
-            all_inconsistent = False
+
+        if is_random:
+            any_qualifies = True
+            if r0 >= carry_start and r1 < p2:
+                all_inconsistent = False
+        else:
+            reach = r0 + _ASSUMED_SPEED * d
+            if reach >= p2:
+                any_qualifies = True
+                all_inconsistent = False
+            # else: fires at r0, expires before p2 — not a carryover
 
     if not any_qualifies:
         return False, False
@@ -555,15 +578,19 @@ def build_parent_skills(
         styles   = _get_styles(cond, precond)
         combined = cond + ("&" + precond if precond else "")
 
-        is_accel = _has_effect(effects, {31})
-        is_vel   = _has_effect(effects, {21, 22, 27})
+        has_accel = _has_effect(effects, {31})
+        has_vel   = _has_effect(effects, {21, 22, 27})
+        # Dual accel+velocity skills count as velocity, never accel — the
+        # accel rating doesn't apply once a skill also has a velocity effect.
+        is_vel   = has_vel
+        is_accel = has_accel and not has_vel
 
         if is_accel:
             verdict = accel_verdict(cond, precond, effects, course_entry, is_inherited=True)
             if verdict and any(verdict.startswith(label) for label in _BAD_LABELS):
                 continue
-            # if verdict and "very unreliable" in verdict:
-            #     continue
+            if verdict and "very unreliable" in verdict:
+                continue
             if verdict and "can be unreliable" in verdict:
                 verdict = _strip_can_be_unreliable(verdict)
             efx     = format_effects(effects)
@@ -584,10 +611,21 @@ def build_parent_skills(
 
             reliability = _reliability_label(cond, precond, regions, p2)
             efx    = format_effects(effects)
-            suffix = " (unreliable)" if reliability == "can be unreliable" else ""
+            # last_spurt_velocity shows "very unreliable" tagged rather than
+            # hard-excluding it (same treatment "can be unreliable" already
+            # gets) — speed_carryover's own gate below is untouched.
+            if reliability == "very unreliable":
+                suffix = " (very unreliable)"
+            elif reliability == "can be unreliable":
+                suffix = " (unreliable)"
+            else:
+                suffix = ""
 
             bdur = int(best.get("baseDuration", 0))
-            sc_qualifies, sc_inconsistent = _fires_as_speed_carryover(regions, p2, bdur)
+            is_random_trigger = _has_random_trigger(cond, precond)
+            sc_qualifies, sc_inconsistent = _fires_as_speed_carryover(
+                regions, p2, bdur, is_random_trigger,
+            )
 
             if reliability != "very unreliable" and sc_qualifies:
                 sc_tags = []
@@ -621,11 +659,11 @@ def build_parent_skills(
                     )
                     seen_in_style["front"].add(sid)
 
-            if (reliability != "very unreliable"
-                    and vel_mod >= _MIN_LSV_MOD
+            lsv_mod_ok = vel_mod >= _MIN_LSV_MOD or (has_accel and vel_mod >= _MIN_VEL_MOD)
+            if (lsv_mod_ok
                     and _fires_in_last_spurt(regions, p2, p3, d)
-                    and _requires_top5(cond)
-                    and not _has_overtake_condition(combined)):
+                    and _requires_top5(cond, n=_LSV_MAX_ORDER)
+                    and not _has_overtake_condition(cond)):
                 if sid not in seen_in_style["all"]:
                     note = _misc_condition_notes(combined)
                     out["all"]["last_spurt_velocity"].append(
