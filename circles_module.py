@@ -2,6 +2,7 @@ import asyncio
 import calendar
 import json
 import math
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -499,7 +500,8 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
         name    = m.get("trainer_name", "Unknown")
         current = _monthly_gain(m.get("daily_fans") or [])
         snap    = snapshots.get(int(vid)) if vid is not None else None
-        daily   = current - snap["monthly_fans"] if snap else None
+        # No snapshot = first day of month; treat month-start as 0 baseline
+        daily   = current - snap["monthly_fans"] if snap else current
 
         if daily is not None and daily >= daily_quota:
             goal_met.append((name, daily))
@@ -685,9 +687,11 @@ async def send_daily_report(
     )
     members = [
         m for m in _raw
-        if _cutoff is not None
-        and m.get("last_updated")
-        and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
+        if _cutoff is None  # No timestamp data — include everyone
+        or (
+            m.get("last_updated")
+            and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
+        )
     ]
 
     if snapshots is None:
@@ -849,6 +853,18 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         logger.error(f"[Circles] API fetch failed: {exc}")
         return
 
+    # Save one raw API snapshot per day for troubleshooting
+    try:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        snap_path = os.path.join("logs", "api_snapshots", f"{today}.json")
+        if not os.path.exists(snap_path):
+            os.makedirs(os.path.dirname(snap_path), exist_ok=True)
+            with open(snap_path, "w", encoding="utf-8") as _f:
+                json.dump(api_data, _f, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning(f"[Circles] Failed to save daily API snapshot: {exc}")
+
+
     _raw_members = api_data.get("members", [])
     last_updated = (
         max((m.get("last_updated", "") for m in _raw_members), default="")
@@ -876,9 +892,11 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         )
         current_members = [
             m for m in _raw_members
-            if _cutoff is not None
-            and m.get("last_updated")
-            and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
+            if _cutoff is None  # No timestamp data — include everyone
+            or (
+                m.get("last_updated")
+                and datetime.fromisoformat(m["last_updated"].replace("Z", "+00:00")) >= _cutoff
+            )
         ]
         all_embeds = _build_member_embeds(current_members)
         batches = [
