@@ -17,6 +17,7 @@ import lookup_module
 import skill_sync
 import cm_module
 import parent_module
+import role_module
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +111,22 @@ async def _slash_whenis_autocomplete(
     return await lookup_module.autocomplete_whenis(interaction, current)
 
 
+@bot.tree.command(name="role", description="Get a character fan role (Tonberries server only)")
+@app_commands.describe(character="Character name — 'Fan' is added automatically")
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+async def _slash_role(interaction: discord.Interaction, character: str):
+    await role_module.handle_role(interaction, character)
+
+
+@_slash_role.autocomplete("character")
+async def _slash_role_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await role_module.autocomplete_role(interaction, current)
+
+
 # ---------------------------------------------------------------------------
 # Bot events
 # ---------------------------------------------------------------------------
@@ -135,6 +152,8 @@ async def on_ready():
     skills_module.load_uma_data()
     parent_module.load_parent_data()
     await parent_module.start_background_tasks()
+    await role_module.init_db()
+    role_module.load_character_cache(force=True)
     await _send_restart_dm()
 
 
