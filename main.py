@@ -381,7 +381,7 @@ async def _cmd_trainee_refresh(message: discord.Message):
     )
     try:
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-u", "tests/build_trainee_data.py",
+            sys.executable, "-u", "build_trainee_data.py",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
