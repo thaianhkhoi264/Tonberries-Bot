@@ -41,3 +41,10 @@ COURSE_LABELS_JSON = f"{UMA_TOOLS_DIR}/course_labels.json"  # uma-tools (inner/o
 TRACK_NAMES_JSON   = f"{UMA_TOOLS_DIR}/tracknames.json"
 SKILL_NAMES_JSON   = f"{UMA_TOOLS_DIR}/skillnames.json"
 GT_GLOBAL_CHARS_JSON = "data/gt_global_chars.json"  # GameTora visible-only character list (refreshed weekly)
+
+# Trainee / petit-image scraper (umamusu.wiki + Fandom fallback).
+# Separate DB from LOCAL_DB; written by build_trainee_data.py (the `trainee refresh` command).
+TRAINEES_DB               = "data/trainees.db"
+PETIT_IMAGE_DIR           = "data/petit_images"             # umamusu.wiki _0011 chibis
+PETIT_IMAGE_FANDOM_DIR    = "data/petit_images_fandom"      # Fandom gap-fills
+PETIT_IMAGE_NORMALIZED_DIR = "data/petit_images_normalized" # alpha-trimmed, both sources
