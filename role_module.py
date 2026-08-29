@@ -37,15 +37,22 @@ import re
 import sqlite3
 import time
 
+import datetime as _dt
+
 import aiosqlite
 import discord
 from discord import app_commands
+from discord.ext import tasks
 
+from bot import bot
 from global_config import LOCAL_DB, MAIN_SERVER_ID, TRAINEES_DB
 
 logger = logging.getLogger("role_module")
 
 MAX_FAN_ROLES = 5
+
+# Daily cleanup of member-less fan roles runs at this UTC time.
+_CLEANUP_TIME = _dt.time(hour=17, minute=30, tzinfo=_dt.timezone.utc)
 
 # Base for the synthetic `created_at` given to pre-existing (non-bot) fan roles.
 # 2000-01-01 UTC + alphabetical index — always far below a real assignment time,
@@ -375,6 +382,105 @@ async def sync_existing_fan_roles(guild: discord.Guild) -> int:
             f"{guild.name} ({guild.id})"
         )
     return added
+
+
+# ---------------------------------------------------------------------------
+# Daily cleanup of member-less fan roles
+# ---------------------------------------------------------------------------
+
+async def cleanup_empty_fan_roles(
+    guild: discord.Guild, *, dry_run: bool = False
+) -> tuple[list[str], str | None]:
+    """Delete every fan role on `guild` that has no members.
+
+    Returns (role_names, skip_reason). `skip_reason` is set (and the list empty)
+    when a safety guard prevented the run:
+      * no Manage Roles permission,
+      * the member cache is incomplete (needs the Server Members intent) — a
+        partial cache would make populated roles look empty.
+    Managed roles, @everyone, and roles above the bot are never touched.
+    """
+    load_character_cache()
+
+    if not guild.me.guild_permissions.manage_roles:
+        return [], "missing Manage Roles permission"
+
+    if not guild.chunked:
+        try:
+            await guild.chunk()
+        except Exception as exc:  # noqa: BLE001
+            return [], f"could not load members ({exc})"
+
+    if guild.member_count and len(guild.members) < guild.member_count * 0.9:
+        return [], (
+            f"member cache incomplete ({len(guild.members)}/{guild.member_count}) "
+            f"— is the Server Members intent enabled?"
+        )
+
+    empty = [
+        r for r in guild.roles
+        if _is_fan_role_name(r.name)
+        and not r.managed
+        and not r.is_default()
+        and r < guild.me.top_role
+        and not r.members
+    ]
+    if not empty:
+        return [], None
+
+    names = [r.name for r in empty]
+    if dry_run:
+        return names, None
+
+    deleted_ids: list[int] = []
+    deleted_names: list[str] = []
+    for role in empty:
+        try:
+            rid = role.id
+            await role.delete(reason="daily cleanup — fan role with no members")
+            deleted_ids.append(rid)
+            deleted_names.append(role.name)
+        except discord.HTTPException as exc:
+            logger.warning(f"[Role] cleanup: failed to delete {role.name!r}: {exc}")
+
+    if deleted_ids:
+        ph = ",".join("?" * len(deleted_ids))
+        async with aiosqlite.connect(LOCAL_DB) as conn:
+            await conn.execute(
+                f"DELETE FROM character_roles WHERE guild_id=? AND role_id IN ({ph})",
+                (guild.id, *deleted_ids),
+            )
+            await conn.execute(
+                f"DELETE FROM user_character_roles WHERE guild_id=? AND role_id IN ({ph})",
+                (guild.id, *deleted_ids),
+            )
+            await conn.commit()
+        logger.info(
+            f"[Role] cleanup removed {len(deleted_names)} empty fan role(s): "
+            f"{', '.join(deleted_names)}"
+        )
+    return deleted_names, None
+
+
+@tasks.loop(time=_CLEANUP_TIME)
+async def _cleanup_loop() -> None:
+    guild = bot.get_guild(MAIN_SERVER_ID)
+    if guild is None:
+        return
+    deleted, skip = await cleanup_empty_fan_roles(guild)
+    if skip:
+        logger.warning(f"[Role] daily cleanup skipped — {skip}")
+
+
+@_cleanup_loop.before_loop
+async def _before_cleanup_loop() -> None:
+    await bot.wait_until_ready()
+
+
+async def start_background_tasks() -> None:
+    if not _cleanup_loop.is_running():
+        _cleanup_loop.start()
+    logger.info("[Role] Background tasks started")
 
 
 # ---------------------------------------------------------------------------

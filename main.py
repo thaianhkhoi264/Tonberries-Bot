@@ -173,6 +173,7 @@ async def on_ready():
     _tonberries = bot.get_guild(MAIN_SERVER_ID)
     if _tonberries:
         await role_module.sync_existing_fan_roles(_tonberries)
+    await role_module.start_background_tasks()
     await _send_restart_dm()
 
 
@@ -256,6 +257,8 @@ async def on_message(message: discord.Message):
         await _cmd_parent_refresh(message)
     elif cmd_lower == "trainee refresh":
         await _cmd_trainee_refresh(message)
+    elif cmd_lower in ("role cleanup", "role cleanup now"):
+        await _cmd_role_cleanup(message, force=cmd_lower.endswith(" now"))
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -285,6 +288,7 @@ async def _cmd_help(message: discord.Message):
         "`skill <name>` — Look up a skill (e.g. `skill Red Shift`)\n"
         "`parent refresh` — Re-scrape the GT global character list\n"
         "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
+        "`role cleanup` — Preview empty fan roles (add `now` to delete them)\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -442,6 +446,35 @@ async def _cmd_trainee_refresh(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Trainee refresh error: {exc}")
         await message.channel.send(f"Trainee refresh error: {exc}")
+
+
+async def _cmd_role_cleanup(message: discord.Message, force: bool = False):
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send("No.")
+        return
+    guild = bot.get_guild(MAIN_SERVER_ID)
+    if guild is None:
+        await message.channel.send("Tonberries server not in cache.")
+        return
+    names, skip = await role_module.cleanup_empty_fan_roles(guild, dry_run=not force)
+    if skip:
+        await message.channel.send(f"Cleanup can't run — {skip}")
+        return
+    if not names:
+        await message.channel.send("No empty fan roles right now.")
+        return
+
+    shown = names[:40]
+    listing = "\n".join(f"- {n}" for n in shown)
+    if len(names) > len(shown):
+        listing += f"\n…and {len(names) - len(shown)} more"
+    if force:
+        await message.channel.send(f"Deleted {len(names)} empty fan role(s):\n{listing}")
+    else:
+        await message.channel.send(
+            f"{len(names)} empty fan role(s) would be deleted (auto-runs daily "
+            f"17:30 UTC; `role cleanup now` to do it now):\n{listing}"
+        )
 
 
 async def _cmd_skill_refresh(message: discord.Message):
