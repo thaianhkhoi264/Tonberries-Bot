@@ -22,6 +22,7 @@ logger = logging.getLogger("tonberries")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True  # required for fan-role cleanup (empty-role detection)
 
 bot = commands.Bot(command_prefix="\x00", intents=intents, help_command=None)
 
