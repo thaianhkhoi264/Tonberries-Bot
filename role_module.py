@@ -15,9 +15,17 @@ role_module.py
 `/removerole`: takes one of the member's fan roles back off them (the guild role
 itself is left alone — other members may still have it).
 
-A "fan role" is any guild role whose name is "<known character> Fan".
+A "fan role" is any guild role whose name is "<known character> Fan" — the
+possessive "<Character>'s Fan" and up to two typos in the character part are
+tolerated (as long as the closest known character is unambiguous).
 Character names + colours come from the scraper output (`TRAINEES_DB`,
 `characters` table); the cache reloads when that file changes (`trainee refresh`).
+
+`sync_existing_fan_roles()` (run on startup) registers fan roles that already
+existed on the server before the bot touched them: `bot_created=0` and a
+synthetic `created_at` ordered alphabetically by role name, so the per-user
+eviction order stays stable and legacy roles always count as older than any
+role handed out through `/role`.
 """
 
 from __future__ import annotations
@@ -39,8 +47,21 @@ logger = logging.getLogger("role_module")
 
 MAX_FAN_ROLES = 5
 
+# Base for the synthetic `created_at` given to pre-existing (non-bot) fan roles.
+# 2000-01-01 UTC + alphabetical index — always far below a real assignment time,
+# so legacy roles sort as oldest, in name order.
+_SYNTHETIC_BASE = 946_684_800
+
 _FAN_SUFFIX = " Fan"
-_STRIP_FAN_RE = re.compile(r"\s*\bfan\b\s*$", re.IGNORECASE)
+_APOS = "'’ʼ"  # straight ', right single quote ', modifier-letter apostrophe
+
+# Trailing " Fan" on a full role name (requires whitespace before "fan").
+_FAN_TAIL_RE = re.compile(r"\s+fan\s*$", re.IGNORECASE)
+# Possessive tail ("'s" / "'"), tolerated so "Special Week's Fan" == "Special Week Fan".
+_POSSESSIVE_RE = re.compile(rf"[{_APOS}]s?$", re.IGNORECASE)
+# Lenient strips for partial autocomplete input.
+_QUERY_FAN_RE = re.compile(r"\s+f(?:an?)?\s*$", re.IGNORECASE)   # trailing f / fa / fan
+_QUERY_POSS_RE = re.compile(rf"\s*[{_APOS}]s?\s*$")              # trailing 's / '
 
 # ---------------------------------------------------------------------------
 # Character cache  (name_lower -> (canonical_name, slug, color_hex|None))
@@ -92,21 +113,95 @@ def load_character_cache(force: bool = False) -> None:
     logger.info(f"[Role] Loaded {len(_chars)} characters from {TRAINEES_DB}")
 
 
-def _resolve_character(text: str) -> tuple[str, str, str | None] | None:
-    """text (with or without a trailing 'Fan') -> (canonical_name, slug, color)."""
+_FUZZY_MAX_EDITS = 2
+_FUZZY_MIN_LEN = 4
+
+
+def _levenshtein(a: str, b: str, max_d: int) -> int:
+    """Edit distance, capped: returns max_d + 1 as soon as it's known to exceed."""
+    la, lb = len(a), len(b)
+    if abs(la - lb) > max_d:
+        return max_d + 1
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        ca = a[i - 1]
+        row_best = cur[0]
+        for j in range(1, lb + 1):
+            cost = 0 if ca == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            row_best = min(row_best, cur[j])
+        if row_best > max_d:
+            return max_d + 1
+        prev = cur
+    return prev[lb]
+
+
+def _fuzzy_character(text: str) -> str | None:
+    """Closest known character to `text` within _FUZZY_MAX_EDITS — only if unambiguous."""
+    key = text.strip().lower()
+    if len(key) < _FUZZY_MIN_LEN:
+        return None
+    best_d = _FUZZY_MAX_EDITS + 1
+    winners: list[str] = []
+    for ckey, meta in _chars.items():
+        d = _levenshtein(key, ckey, _FUZZY_MAX_EDITS)
+        if d < best_d:
+            best_d, winners = d, [meta[0]]
+        elif d == best_d:
+            winners.append(meta[0])
+    if best_d <= _FUZZY_MAX_EDITS and len(winners) == 1:
+        return winners[0]
+    return None
+
+
+def _fan_role_base(name: str) -> str | None:
+    """A full fan-role name -> the canonical character name, or None.
+
+    Accepts "<Character> Fan", the possessive "<Character>'s Fan" (straight or
+    curly apostrophe), and up to _FUZZY_MAX_EDITS typos in the character part
+    (as long as the closest match is unambiguous). Case-insensitive.
+    """
     load_character_cache()
-    base = _STRIP_FAN_RE.sub("", text.strip()).strip()
-    return _chars.get(base.lower())
+    m = _FAN_TAIL_RE.search(name)
+    if not m:
+        return None
+    head = name[: m.start()].strip()
+    depossessive = _POSSESSIVE_RE.sub("", head).strip()
+    for cand in (head, depossessive):
+        hit = _chars.get(cand.lower())
+        if hit:
+            return hit[0]
+    return _fuzzy_character(depossessive)
+
+
+def _normalize_query(text: str) -> str:
+    """Lenient strip of a trailing 'fan'/'f'/possessive from partial user input."""
+    t = _QUERY_FAN_RE.sub("", text.strip())
+    t = _QUERY_POSS_RE.sub("", t)
+    return t.strip().lower()
+
+
+def _resolve_character(text: str) -> tuple[str, str, str | None] | None:
+    """text (with or without a trailing 'Fan'/'s Fan') -> (canonical, slug, color)."""
+    load_character_cache()
+    base = _fan_role_base(text)
+    if base:
+        return _chars.get(base.lower())
+    q = _normalize_query(text)
+    hit = _chars.get(q) or _chars.get(text.strip().lower())
+    if hit:
+        return hit
+    fuzzy = _fuzzy_character(q)
+    return _chars.get(fuzzy.lower()) if fuzzy else None
 
 
 def _is_fan_role_name(name: str) -> bool:
-    if not name.endswith(_FAN_SUFFIX):
-        return False
-    return name[: -len(_FAN_SUFFIX)].strip().lower() in _chars
+    return _fan_role_base(name) is not None
 
 
 def _member_fan_roles(member: discord.Member) -> list[discord.Role]:
-    """Every role on the member whose name is '<known character> Fan'."""
+    """Every role on the member named '<known character>['s] Fan'."""
     load_character_cache()
     return [r for r in member.roles if _is_fan_role_name(r.name)]
 
@@ -195,17 +290,24 @@ async def _untrack_assignment(conn: aiosqlite.Connection, guild_id: int,
 
 async def _fan_roles_by_age(conn: aiosqlite.Connection, member: discord.Member
                             ) -> list[discord.Role]:
-    """The member's fan roles, oldest first.
+    """The member's fan roles, oldest first (this is the /role eviction order).
 
-    Ordered by the tracked `added_at`; roles the member holds but that were
-    never assigned through the bot sort first (treated as age 0) and are
-    pruned/absent from the tracking table.
+    Age is the per-user `added_at` if the role was handed out through the bot;
+    otherwise the guild-level `character_roles.created_at` (a synthetic
+    alphabetical value for pre-existing roles, see `sync_existing_fan_roles`);
+    otherwise 0. Ties break by role name, then id.
     """
     async with conn.execute(
         "SELECT role_id, added_at FROM user_character_roles WHERE guild_id=? AND user_id=?",
         (member.guild.id, member.id),
     ) as cur:
         added_at = {rid: ts for rid, ts in await cur.fetchall()}
+
+    async with conn.execute(
+        "SELECT role_id, created_at FROM character_roles WHERE guild_id=?",
+        (member.guild.id,),
+    ) as cur:
+        role_created = {rid: ts for rid, ts in await cur.fetchall()}
 
     current = _member_fan_roles(member)
     current_ids = {r.id for r in current}
@@ -215,8 +317,64 @@ async def _fan_roles_by_age(conn: aiosqlite.Connection, member: discord.Member
     for rid in stale:
         await _untrack_assignment(conn, member.guild.id, member.id, rid)
 
-    current.sort(key=lambda r: (added_at.get(r.id, 0), r.id))
+    def _age(r: discord.Role) -> int:
+        return added_at.get(r.id) or role_created.get(r.id, 0)
+
+    current.sort(key=lambda r: (_age(r), r.name.lower(), r.id))
     return current
+
+
+async def sync_existing_fan_roles(guild: discord.Guild) -> int:
+    """Register '<character> Fan' guild roles that the bot has never seen.
+
+    Pre-existing roles get `bot_created=0` and a synthetic `created_at` of
+    `_SYNTHETIC_BASE + <alphabetical index among all fan roles>`, giving a
+    stable, name-ordered comparison point for `/role` eviction. Roles already
+    in `character_roles` (bot-created, or synced on a previous run) are left
+    untouched. Returns the number newly registered.
+    """
+    load_character_cache()
+    fan_roles = sorted(
+        (r for r in guild.roles if _is_fan_role_name(r.name)),
+        key=lambda r: r.name.lower(),
+    )
+    if not fan_roles:
+        return 0
+
+    added = 0
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        async with conn.execute(
+            "SELECT role_id FROM character_roles WHERE guild_id=?", (guild.id,)
+        ) as cur:
+            known = {rid for (rid,) in await cur.fetchall()}
+
+        for idx, role in enumerate(fan_roles):
+            if role.id in known:
+                continue
+            resolved = _resolve_character(role.name)
+            slug = resolved[1] if resolved else None
+            char_name = resolved[0] if resolved else (_fan_role_base(role.name) or role.name)
+            color = resolved[2] if resolved else None
+            await conn.execute(
+                """
+                INSERT INTO character_roles
+                    (guild_id, role_id, role_name, character_slug, character_name,
+                     color, bot_created, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                ON CONFLICT(guild_id, role_id) DO NOTHING
+                """,
+                (guild.id, role.id, role.name, slug, char_name, color,
+                 _SYNTHETIC_BASE + idx),
+            )
+            added += 1
+        await conn.commit()
+
+    if added:
+        logger.info(
+            f"[Role] Registered {added} pre-existing fan role(s) in "
+            f"{guild.name} ({guild.id})"
+        )
+    return added
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +386,7 @@ async def autocomplete_role(
     current: str,
 ) -> list[app_commands.Choice[str]]:
     load_character_cache()
-    cur = _STRIP_FAN_RE.sub("", current.strip()).strip().lower()
+    cur = _normalize_query(current)
 
     names = _char_names_sorted
     if cur:
@@ -249,7 +407,7 @@ async def autocomplete_removerole(
     member = interaction.user
     if not isinstance(member, discord.Member):
         return []
-    cur = _STRIP_FAN_RE.sub("", current.strip()).strip().lower()
+    cur = _normalize_query(current)
     names = sorted(r.name for r in _member_fan_roles(member))
     if cur:
         names = [n for n in names if cur in n.lower()]
@@ -297,13 +455,18 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
         )
         return
 
-    lock = _role_locks.setdefault(f"{guild.id}:{role_name.lower()}", asyncio.Lock())
+    lock = _role_locks.setdefault(f"{guild.id}:{char_name.lower()}", asyncio.Lock())
     async with lock:
-        # Reuse an existing role by name — exact match first, then case-insensitive.
+        # Reuse an existing role: exact "<Character> Fan", then case-insensitive,
+        # then any role that resolves to this character ("<Character>'s Fan" etc).
         role = discord.utils.get(guild.roles, name=role_name)
         if role is None:
             role = next(
                 (r for r in guild.roles if r.name.lower() == role_name.lower()), None
+            )
+        if role is None:
+            role = next(
+                (r for r in guild.roles if _fan_role_base(r.name) == char_name), None
             )
 
         bot_created = False
@@ -410,18 +573,15 @@ async def handle_removerole(interaction: discord.Interaction, text: str) -> None
     resolved = _resolve_character(text)
     role: discord.Role | None = None
     if resolved is not None:
-        role_name = f"{resolved[0]}{_FAN_SUFFIX}"
-        role = discord.utils.get(member.roles, name=role_name) or next(
-            (r for r in member.roles if r.name.lower() == role_name.lower()), None
-        )
-    if role is None:
-        # Fall back to a direct name match against the member's fan roles.
-        want = _STRIP_FAN_RE.sub("", text.strip()).strip().lower()
+        # Any of the member's fan roles that resolve to this character
+        # ("<Character> Fan" or "<Character>'s Fan").
         role = next(
-            (r for r in _member_fan_roles(member)
-             if r.name[: -len(_FAN_SUFFIX)].strip().lower() == want),
+            (r for r in _member_fan_roles(member) if _fan_role_base(r.name) == resolved[0]),
             None,
         )
+    if role is None:
+        # Last resort: the caller passed a role name verbatim.
+        role = discord.utils.get(member.roles, name=text.strip())
 
     if role is None:
         await interaction.followup.send(

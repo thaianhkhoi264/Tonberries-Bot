@@ -170,6 +170,9 @@ async def on_ready():
     await parent_module.start_background_tasks()
     await role_module.init_db()
     role_module.load_character_cache(force=True)
+    _tonberries = bot.get_guild(MAIN_SERVER_ID)
+    if _tonberries:
+        await role_module.sync_existing_fan_roles(_tonberries)
     await _send_restart_dm()
 
 
