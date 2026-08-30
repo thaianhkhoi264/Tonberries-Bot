@@ -23,11 +23,29 @@
 | `tests/leaderboard_sampledata.py` | sample text/petit/colour, from `tests/tonberries.db` (random fan character when link tables are absent) |
 | `tests/leaderboard_calibration.png` / `_final.png` | generated previews |
 
-## Bot command
+## Bot command / auto-post
 
-`render monthly` (owner DM) → `build_monthly_image()` → PNG DM'd back. Renders
-the **current month** from `circle_member_snapshots`. Needs `data/trainees.db`
-populated (`trainee refresh`) for petits/colours.
+`render monthly` (owner DM) → `build.render_monthly_png()` → PNG DM'd back.
+Renders the **current month**. Needs `data/trainees.db` populated
+(`trainee refresh`) for petits/colours.
+
+**Automatic:** `circles_module._circle_update_loop` posts the most recent
+**completed** month's leaderboard to `GENERAL_CHANNEL_ID` right after the first
+daily report of a new month (detected by `last_report_date` crossing a month
+boundary). Posts unconditionally (not gated on the shaming toggle); skipped with
+a log warning if that month has no data. `circles_module.post_monthly_leaderboard()`
+(no args → `data.latest_finalized_month()`) does the work.
+
+### Where the monthly totals come from
+
+`circle_member_snapshots` keeps only **one row per member** (rolling, overwritten
+every daily run), so it can't answer "what were August's finals?". Every daily
+save now *also* writes `circle_monthly_finals` — keyed by `(viewer_id, year,
+month)`, so once a month passes its row is frozen. `data.top_members(year,
+month)` reads `circle_monthly_finals` first and falls back to
+`circle_member_snapshots`. `circles_module` seeds `circle_monthly_finals` from
+the current snapshots on startup (`INSERT OR IGNORE`) and prunes to the last 13
+months.
 
 Fan character = the member's linked Discord account (`player_links`) → their
 **current fan roles** (read live from the guild, so manually-assigned roles
@@ -178,5 +196,5 @@ The editor snaps drags to x = ¼, ⅓, ½, ⅔, ¾ of the canvas (600 / 800 / 12
 - [x] ranks 11–30 — brown rank number + left-aligned name/fans (cols 2 & 3)
 - [x] per-row fan petit image (`rank{N}_petit`); random for now, `fan_petit` live
 - [ ] background
-- [ ] wire into the bot (end-of-month, before daily reset) — build `texts`/`petits`
-      from live circle + link data, call `render(..., guides=False)`
+- [x] wire into the bot — `render monthly` owner DM + auto-post of the previous
+      month on the first daily report of each new month

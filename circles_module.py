@@ -11,7 +11,13 @@ import discord
 
 import uma_moe_api
 from bot import bot, logger
-from global_config import CIRCLE_CHANNEL_ID, GENERAL_CHANNEL_ID, LOCAL_DB, OWNER_USER_IDS
+from global_config import (
+    CIRCLE_CHANNEL_ID,
+    GENERAL_CHANNEL_ID,
+    LOCAL_DB,
+    MAIN_SERVER_ID,
+    OWNER_USER_IDS,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -116,6 +122,30 @@ async def init_db() -> None:
                 await conn.execute(f"ALTER TABLE circle_member_snapshots ADD COLUMN {col} INTEGER")
             except Exception:
                 pass
+
+        # Per-month finals: one row per (member, year, month), never overwritten
+        # once that month passes — the historical source for the Fan Leaderboard.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS circle_monthly_finals (
+                viewer_id    INTEGER NOT NULL,
+                year         INTEGER NOT NULL,
+                month        INTEGER NOT NULL,
+                trainer_name TEXT,
+                monthly_fans INTEGER NOT NULL,
+                saved_at     TEXT NOT NULL,
+                PRIMARY KEY (viewer_id, year, month)
+            )
+        """)
+        # Seed from the current rolling snapshots (idempotent — never clobbers).
+        await conn.execute("""
+            INSERT OR IGNORE INTO circle_monthly_finals
+                (viewer_id, year, month, trainer_name, monthly_fans, saved_at)
+            SELECT viewer_id, year, month, trainer_name, monthly_fans, saved_at
+            FROM circle_member_snapshots
+            WHERE year IS NOT NULL AND month IS NOT NULL
+        """)
+        await _prune_monthly_finals(conn)
+
         # Load persisted monthly requirement into the module variable
         global _monthly_requirement
         raw = await _get(conn, "monthly_requirement")
@@ -143,18 +173,40 @@ async def _set(conn, key: str, value: str) -> None:
     )
 
 
+# Keep ~13 months of per-month finals (12 full + the month in progress).
+MONTHLY_FINALS_KEEP = 13
+
+
+async def _prune_monthly_finals(conn) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now.year * 12 + (now.month - 1) - (MONTHLY_FINALS_KEEP - 1)
+    await conn.execute(
+        "DELETE FROM circle_monthly_finals WHERE year * 12 + (month - 1) < ?",
+        (cutoff,),
+    )
+
+
 async def _save_snapshots(conn, members: list[dict]) -> None:
     now = datetime.now(timezone.utc)
     for m in members:
         vid = m.get("viewer_id")
         if vid is None:
             continue
+        name = m.get("trainer_name", "")
+        gain = _monthly_gain(m.get("daily_fans") or [])
         await conn.execute(
             """INSERT OR REPLACE INTO circle_member_snapshots
                (viewer_id, trainer_name, monthly_fans, saved_at, year, month)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (int(vid), m.get("trainer_name", ""), _monthly_gain(m.get("daily_fans") or []),
-             now.isoformat(), now.year, now.month),
+            (int(vid), name, gain, now.isoformat(), now.year, now.month),
+        )
+        # Mirror into the per-month finals. Same month → updated in place; once
+        # the month rolls over the old row is a different PK and stays frozen.
+        await conn.execute(
+            """INSERT OR REPLACE INTO circle_monthly_finals
+               (viewer_id, year, month, trainer_name, monthly_fans, saved_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (int(vid), now.year, now.month, name, gain, now.isoformat()),
         )
 
 
@@ -762,6 +814,48 @@ async def send_daily_report(
     logger.info(f"[Circles] Daily report sent to {len(user_ids)} owner(s)")
 
 
+async def post_monthly_leaderboard(year: int | None = None,
+                                   month: int | None = None) -> None:
+    """Render and post the Monthly Fan Leaderboard image to the general channel.
+
+    With no arguments, posts the most recent *completed* month held in
+    `circle_monthly_finals`. No-op (logged) if that month has no data or the
+    channel is unavailable.
+    """
+    from leaderboard import data as lb_data
+    from leaderboard.build import has_data, render_monthly_png
+
+    if year is None or month is None:
+        ym = lb_data.latest_finalized_month()
+        if ym is None:
+            logger.warning("[Circles] No finalized month available — skipping leaderboard")
+            return
+        year, month = ym
+
+    if not has_data(year, month):
+        logger.warning(
+            f"[Circles] No snapshots for {year}-{month:02d} — skipping leaderboard"
+        )
+        return
+
+    channel = bot.get_channel(GENERAL_CHANNEL_ID)
+    if channel is None:
+        logger.error("[Circles] General channel unavailable — skipping leaderboard")
+        return
+
+    try:
+        buf, filename, label = await render_monthly_png(
+            bot.get_guild(MAIN_SERVER_ID), year=year, month=month
+        )
+        await channel.send(
+            f"# {label} — Fan Leaderboard",
+            file=discord.File(buf, filename=filename),
+        )
+        logger.info(f"[Circles] Posted {label} Fan Leaderboard")
+    except Exception as exc:
+        logger.error(f"[Circles] Monthly leaderboard post failed: {exc}")
+
+
 async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
     """Clean up and reorder tracked circle messages.
 
@@ -1059,6 +1153,12 @@ async def _circle_update_loop() -> None:
                 logger.info("[Circles] Daily report already sent today — skipping")
                 continue
 
+            # First report of a new month → also post last month's leaderboard.
+            first_of_month = (
+                last_report_date is not None
+                and last_report_date[:7] != today[:7]
+            )
+
             await post_or_edit(force=True, save_snapshots=True)
             shaming = await get_shaming_enabled()
             await send_daily_report(
@@ -1066,6 +1166,9 @@ async def _circle_update_loop() -> None:
                 snapshots=old_snapshots,
                 post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
             )
+
+            if first_of_month:
+                await post_monthly_leaderboard()
 
             async with aiosqlite.connect(LOCAL_DB) as conn:
                 await _set(conn, "last_report_date", today)

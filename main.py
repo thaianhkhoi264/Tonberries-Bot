@@ -493,27 +493,12 @@ async def _cmd_render_monthly(message: discord.Message):
         return
     await message.channel.send("Rendering the Monthly Fan Leaderboard…")
     try:
-        import io
-        from leaderboard.build import build_monthly_image, image_filename
+        from leaderboard.build import render_monthly_png
 
-        # Resolve each member's current fan roles from the live guild so
-        # manually-assigned fan roles count (not just ones set via /role).
-        guild = bot.get_guild(MAIN_SERVER_ID)
-        member_roles: dict[int, set[int]] = {}
-        if guild is not None:
-            if not guild.chunked:
-                await guild.chunk()
-            member_roles = {m.id: {r.id for r in m.roles} for m in guild.members}
-
-        img, label = await asyncio.to_thread(
-            build_monthly_image, member_roles=member_roles
-        )
-        buf = io.BytesIO()
-        img.save(buf, "PNG")
-        buf.seek(0)
+        buf, filename, label = await render_monthly_png(bot.get_guild(MAIN_SERVER_ID))
         await message.channel.send(
             f"**Monthly Fan Leaderboard — {label}**",
-            file=discord.File(buf, filename=image_filename(label)),
+            file=discord.File(buf, filename=filename),
         )
     except Exception as exc:
         logger.error(f"[Bot] render monthly failed: {exc}")
