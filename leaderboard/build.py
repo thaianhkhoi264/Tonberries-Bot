@@ -23,6 +23,7 @@ def build_monthly_image(*, year: int | None = None, month: int | None = None,
     layout = render.load_layout()
     label = data.month_label(year, month)
     members = data.top_members(year, month)
+    eliminated = data.eliminated_ranks(members, data.monthly_requirement())
 
     texts: dict[str, str] = {"month_text": label}
     petits: dict[str, str] = {}
@@ -35,7 +36,7 @@ def build_monthly_image(*, year: int | None = None, month: int | None = None,
             petits[f"rank{i}_petit"] = petit
         colors[i] = color or data.NEUTRAL_COLOR
 
-    img, _ = render.render(layout, texts, petits, colors, guides=guides)
+    img, _ = render.render(layout, texts, petits, colors, eliminated, guides=guides)
     return img, label
 
 
