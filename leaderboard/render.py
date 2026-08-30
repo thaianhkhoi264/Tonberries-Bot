@@ -28,13 +28,20 @@ import os
 import re
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LAYOUT_PATH = Path(__file__).resolve().parent / "layout.json"
 
 Box = tuple[int, int, int, int]  # x, y, w, h
-_RANK_TEXT_RE = re.compile(r"^rank(\d+)_(?:name|fans)$")
+_RANK_ANY_RE = re.compile(r"^rank(\d+)_(name|fans|num|petit)$")
+
+# "Eliminated" members (monthly fans below the requirement) — comedic treatment.
+ELIM_FONT = "fonts/HelpMe.ttf"          # name + "ELIMINATED" only (number keeps its font)
+ELIM_RED = "#DC2A2A"
+ELIM_RED_DARK = "#5C0E0E"
+ELIM_X = "#8C1616"                      # the big crossed-out X (no stroke)
+ELIM_X_MIN_RATIO = 2.8                  # X width : height
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +296,12 @@ def place_order(canvas: Image.Image, spec: dict, groups: dict) -> Box:
     return place_layer(canvas, img, spec)
 
 
-def place_petit(canvas: Image.Image, spec: dict, src: str | None) -> Box | None:
+def place_petit(canvas: Image.Image, spec: dict, src: str | None,
+                eliminated: bool = False) -> Box | None:
     """Character petit/chibi at the end of a row. `src` (repo-relative path)
     comes from the render call — the layout only stores position/size. Aspect
-    is preserved; `height` (or `scale`) sets the size. Returns None if no src."""
+    is preserved; `height` (or `scale`) sets the size. Returns None if no src.
+    Eliminated members' petits are grayscaled and flipped upside-down."""
     if not src:
         return None
     img = Image.open(REPO_ROOT / src).convert("RGBA")
@@ -304,6 +313,10 @@ def place_petit(canvas: Image.Image, spec: dict, src: str | None) -> Box | None:
         s = float(spec["scale"])
         img = img.resize((max(1, round(img.width * s)), max(1, round(img.height * s))),
                          Image.LANCZOS)
+    if eliminated:
+        gray = ImageOps.grayscale(img)
+        img = Image.merge("RGBA", (gray, gray, gray, img.getchannel("A")))
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
     return place_layer(canvas, img, spec)
 
 
@@ -313,7 +326,8 @@ def place_petit(canvas: Image.Image, spec: dict, src: str | None) -> Box | None:
 
 def render(layout: dict, texts: dict[str, str] | None = None,
            petits: dict[str, str] | None = None,
-           colors: dict[int, str] | None = None, *,
+           colors: dict[int, str] | None = None,
+           eliminated: set[int] | None = None, *,
            guides: bool | None = None) -> tuple[Image.Image, dict[str, Box]]:
     """Return (RGBA image, {element_name: box}).
 
@@ -324,10 +338,14 @@ def render(layout: dict, texts: dict[str, str] | None = None,
     with no entry is skipped.
     `colors` maps a rank number -> hex; `rank{N}_name` / `rank{N}_fans` are then
     repainted with `member_paint(N, colour, existing_stroke_width)`.
+    `eliminated` is a set of rank numbers (20-30) whose monthly fans fell below
+    the requirement: red HelpMe-font name/number, fan count -> "ELIMINATED",
+    grayscaled upside-down petit, and a fat strikethrough across the row.
     """
     texts = texts or {}
     petits = petits or {}
     colors = colors or {}
+    eliminated = eliminated or set()
     cv = layout["canvas"]
     canvas = Image.new("RGBA", (int(cv["width"]), int(cv["height"])), (0, 0, 0, 0))
     bg = cv.get("background")
@@ -342,11 +360,25 @@ def render(layout: dict, texts: dict[str, str] | None = None,
     ordered = sorted(els.items(), key=lambda kv: kv[1].get("type") != "background")
     for name, spec in ordered:
         etype = spec.get("type", "image")
+        mm = _RANK_ANY_RE.match(name)
+        rank = int(mm.group(1)) if mm else None
+        kind = mm.group(2) if mm else None
+        elim = rank in eliminated
+
         if etype == "text":
             content = texts.get(name) or spec.get("text") or name
-            mm = _RANK_TEXT_RE.match(name)
-            if mm and colors.get(int(mm.group(1))):
-                rank = int(mm.group(1))
+            if elim:
+                spec = dict(spec)
+                spec["fill"] = ELIM_RED
+                if kind == "num":               # keep its font + white outline
+                    content = str(rank)
+                else:                           # name / fans -> HelpMe font, red stroke
+                    spec["font"] = ELIM_FONT
+                    sw = (spec.get("stroke") or {}).get("width", 4)
+                    spec["stroke"] = {"width": sw, "color": ELIM_RED_DARK}
+                if kind == "fans":
+                    content = "ELIMINATED"
+            elif kind in ("name", "fans") and colors.get(rank):
                 sw = (spec.get("stroke") or {}).get("width", 4)
                 spec = {**spec, **member_paint(rank, colors[rank], sw)}
             layer = render_text_layer(str(content), spec)
@@ -354,7 +386,7 @@ def render(layout: dict, texts: dict[str, str] | None = None,
         elif etype == "order":
             boxes[name] = place_order(canvas, spec, groups)
         elif etype == "petit":
-            box = place_petit(canvas, spec, petits.get(name))
+            box = place_petit(canvas, spec, petits.get(name), eliminated=elim)
             if box:
                 boxes[name] = box
         elif etype == "dia_pair":
@@ -362,11 +394,37 @@ def render(layout: dict, texts: dict[str, str] | None = None,
         else:  # "image" and "background"
             boxes[name] = place_image(canvas, spec)
 
+    _strike_eliminated(canvas, boxes, eliminated)
+
     show_guides = layout.get("guides", {}).get("show", False) if guides is None else guides
     if show_guides:
         _draw_guides(canvas, layout.get("guides", {}), boxes)
 
     return canvas, boxes
+
+
+def _strike_eliminated(canvas: Image.Image, boxes: dict[str, Box],
+                       eliminated: set[int]) -> None:
+    """A big flat "X" (HelpMe-font slashes, stretched, no stroke) crossed over
+    each eliminated member's row, from the rank number across to the petit.
+    Kept wide (>= ELIM_X_MIN_RATIO : 1) and vertically centred so the red name
+    stays readable above/below it."""
+    x_glyph = render_text_layer("X", {"font": ELIM_FONT, "size": 200,
+                                      "tracking": 0, "fill": ELIM_X})
+    for rank in eliminated:
+        row = [b for k in ("num", "name", "fans")
+               if (b := boxes.get(f"rank{rank}_{k}"))]
+        if not row:
+            continue
+        petit = boxes.get(f"rank{rank}_petit")
+        x0 = min(b[0] for b in row)
+        x1 = (petit[0] + petit[2]) if petit else max(b[0] + b[2] for b in row)
+        y0 = min(b[1] for b in row)
+        y1 = max(b[1] + b[3] for b in row)
+        w = max(1, round(x1 - x0))
+        h = max(1, min(round(y1 - y0), round(w / ELIM_X_MIN_RATIO)))
+        y = round(y0 + ((y1 - y0) - h) / 2)
+        canvas.alpha_composite(x_glyph.resize((w, h), Image.LANCZOS), (round(x0), y))
 
 
 def _draw_guides(canvas: Image.Image, gcfg: dict, boxes: dict[str, Box]) -> None:

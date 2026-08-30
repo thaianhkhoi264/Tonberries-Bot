@@ -142,6 +142,11 @@ when they look like one). Dotted keys index into `elements`, e.g.
   - ranks 11–30: same, but the stroke width is scaled to `0.7×`
   - no linked Discord account **or no fan role** → neutral silvery colour, no petit
 - Petit selection skips the generic default costume (`costume_id == '000101'`).
+- **Eliminated** (rank ≥ 20 **and** monthly fans below the requirement, from
+  `circle_messages.monthly_requirement`): name + number in red **HelpMe** font,
+  fan count → `ELIMINATED`, petit grayscaled + flipped upside-down, and a big
+  stretched red "X" (HelpMe glyph) crossed from the number to the petit.
+  `render(..., eliminated={ranks})`; the test render uses a 25 M requirement.
 - `stroke` in a text spec may be a **list** of stroke specs — each `width` is
   measured from the glyph edge and they paint widest-first, so `[{outer},{inner}]`
   makes concentric rings.

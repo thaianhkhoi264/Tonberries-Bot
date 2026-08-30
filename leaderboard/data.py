@@ -14,6 +14,7 @@ A member with no linked Discord account, or holding no fan role, gets
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -24,6 +25,8 @@ from global_config import LOCAL_DB, MAIN_SERVER_ID, TRAINEES_DB
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NEUTRAL_COLOR = "#E9E9EF"
 GENERIC_COSTUME = "000101"   # generic default petit — skipped
+DEFAULT_REQUIREMENT = 20_000_000
+ELIM_RANK_FLOOR = 20         # only ranks >= this can be "eliminated"
 
 
 def _ro(path: str) -> sqlite3.Connection | None:
@@ -56,6 +59,33 @@ def top_members(year: int | None = None, month: int | None = None,
     finally:
         conn.close()
     return [(name.strip(), int(fans)) for name, fans in rows]
+
+
+def monthly_requirement() -> int:
+    """The club's per-member monthly fan requirement (from circle_messages)."""
+    conn = _ro(LOCAL_DB)
+    if conn is None:
+        return DEFAULT_REQUIREMENT
+    try:
+        row = conn.execute(
+            "SELECT value FROM circle_messages WHERE key='monthly_requirement'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    finally:
+        conn.close()
+    if row and row[0]:
+        try:
+            return int(json.loads(row[0]).get("value", DEFAULT_REQUIREMENT))
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_REQUIREMENT
+
+
+def eliminated_ranks(members: list[tuple[str, int]], requirement: int) -> set[int]:
+    """Ranks (>= ELIM_RANK_FLOOR) whose monthly fans fell below `requirement`."""
+    return {i for i, (_, fans) in enumerate(members, 1)
+            if i >= ELIM_RANK_FLOOR and fans < requirement}
 
 
 @lru_cache(maxsize=1)
