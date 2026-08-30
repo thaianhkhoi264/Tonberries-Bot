@@ -1,0 +1,1634 @@
+{
+  "canvas": {
+    "width": 2400,
+    "height": 3150,
+    "background": null
+  },
+  "elements": {
+    "confetti": {
+      "type": "background",
+      "path": "assets/images/Confetti.png",
+      "align": "left",
+      "x": 0,
+      "y": 0,
+      "scale": 1.0
+    },
+    "dia_pair": {
+      "type": "dia_pair",
+      "left_src": "assets/images/Dia Left.png",
+      "right_src": "assets/images/Dia Right.png",
+      "x": 30,
+      "y": 210,
+      "scale": 2.3
+    },
+    "header_image": {
+      "type": "image",
+      "path": "assets/images/Fan Leaderboard.png",
+      "align": "center",
+      "x": 0,
+      "y": 57,
+      "scale": 1.25
+    },
+    "month_text": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 150,
+      "align": "center",
+      "x": 0,
+      "y": 393,
+      "tracking": 0,
+      "fill": {
+        "from": "#FFD6D1",
+        "to": "#EF3D40",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 7,
+        "from": "#FFE803",
+        "to": "#7C3816",
+        "angle": 90
+      }
+    },
+    "order_00": {
+      "type": "order",
+      "index": 0,
+      "align": "left",
+      "x": 640,
+      "y": 600,
+      "height": 300
+    },
+    "rank1_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 108,
+      "align": "left",
+      "x": 972,
+      "y": 616,
+      "tracking": 0,
+      "text": "Cluuto",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 8,
+        "color": "#000000"
+      }
+    },
+    "rank1_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 90,
+      "align": "left",
+      "x": 972,
+      "y": 752,
+      "tracking": 0,
+      "text": "286,962,712",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 7,
+        "color": "#000000"
+      }
+    },
+    "rank1_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1544,
+      "y": 600,
+      "height": 300
+    },
+    "order_01": {
+      "type": "order",
+      "index": 1,
+      "align": "left",
+      "x": 188,
+      "y": 1000,
+      "height": 210
+    },
+    "rank2_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 76,
+      "align": "left",
+      "x": 435,
+      "y": 1011,
+      "tracking": 0,
+      "text": "caeruleum",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 6,
+        "color": "#000000"
+      }
+    },
+    "rank2_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 435,
+      "y": 1107,
+      "tracking": 0,
+      "text": "201,096,588",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank2_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 843,
+      "y": 988,
+      "height": 235
+    },
+    "order_02": {
+      "type": "order",
+      "index": 2,
+      "align": "left",
+      "x": 1388,
+      "y": 1000,
+      "height": 210
+    },
+    "rank3_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 76,
+      "align": "left",
+      "x": 1636,
+      "y": 1011,
+      "tracking": 0,
+      "text": "Auxlley",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 6,
+        "color": "#000000"
+      }
+    },
+    "rank3_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 1636,
+      "y": 1107,
+      "tracking": 0,
+      "text": "127,195,813",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank3_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2044,
+      "y": 988,
+      "height": 235
+    },
+    "order_03": {
+      "type": "order",
+      "index": 3,
+      "align": "left",
+      "x": 36,
+      "y": 1370,
+      "group": "rest"
+    },
+    "rank4_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 1372,
+      "tracking": 0,
+      "text": "PresTeal",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank4_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 1450,
+      "tracking": 0,
+      "text": "117,103,388",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank4_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 1342,
+      "height": 210
+    },
+    "order_04": {
+      "type": "order",
+      "index": 4,
+      "align": "left",
+      "x": 36,
+      "y": 1600,
+      "group": "rest"
+    },
+    "rank5_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 1602,
+      "tracking": 0,
+      "text": "Mascha",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank5_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 1680,
+      "tracking": 0,
+      "text": "112,450,371",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank5_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 1572,
+      "height": 210
+    },
+    "order_05": {
+      "type": "order",
+      "index": 5,
+      "align": "left",
+      "x": 36,
+      "y": 1830,
+      "group": "rest"
+    },
+    "rank6_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 1832,
+      "tracking": 0,
+      "text": "Ashtran",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank6_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 1910,
+      "tracking": 0,
+      "text": "100,887,474",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank6_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 1802,
+      "height": 210
+    },
+    "order_06": {
+      "type": "order",
+      "index": 6,
+      "align": "left",
+      "x": 36,
+      "y": 2060,
+      "group": "rest"
+    },
+    "rank7_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 2062,
+      "tracking": 0,
+      "text": "Lilly",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank7_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 2140,
+      "tracking": 0,
+      "text": "96,505,804",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank7_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 2032,
+      "height": 210
+    },
+    "order_07": {
+      "type": "order",
+      "index": 7,
+      "align": "left",
+      "x": 36,
+      "y": 2290,
+      "group": "rest"
+    },
+    "rank8_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 2292,
+      "tracking": 0,
+      "text": "eevee",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank8_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 2370,
+      "tracking": 0,
+      "text": "96,395,511",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank8_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 2262,
+      "height": 210
+    },
+    "order_08": {
+      "type": "order",
+      "index": 8,
+      "align": "left",
+      "x": 36,
+      "y": 2520,
+      "group": "rest"
+    },
+    "rank9_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 2522,
+      "tracking": 0,
+      "text": "Exajeel",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank9_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 2600,
+      "tracking": 0,
+      "text": "96,283,042",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank9_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 2492,
+      "height": 210
+    },
+    "order_09": {
+      "type": "order",
+      "index": 9,
+      "align": "left",
+      "x": 36,
+      "y": 2750,
+      "group": "rest"
+    },
+    "rank10_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 62,
+      "align": "left",
+      "x": 335,
+      "y": 2752,
+      "tracking": 0,
+      "text": "Sealgyu",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 5,
+        "color": "#000000"
+      }
+    },
+    "rank10_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 50,
+      "align": "left",
+      "x": 335,
+      "y": 2830,
+      "tracking": 0,
+      "text": "84,501,369",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank10_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 672,
+      "y": 2722,
+      "height": 210
+    },
+    "rank11_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 1356,
+      "tracking": 0,
+      "text": "11",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank11_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 1370,
+      "tracking": 0,
+      "text": "badgame",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank11_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 1434,
+      "tracking": 0,
+      "text": "82,821,798",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank11_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 1342,
+      "height": 172
+    },
+    "rank12_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 1538,
+      "tracking": 0,
+      "text": "12",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank12_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 1552,
+      "tracking": 0,
+      "text": "Kosmo",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank12_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 1616,
+      "tracking": 0,
+      "text": "68,637,153",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank12_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 1524,
+      "height": 172
+    },
+    "rank13_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 1720,
+      "tracking": 0,
+      "text": "13",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank13_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 1734,
+      "tracking": 0,
+      "text": "Sextono Diamond",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank13_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 1798,
+      "tracking": 0,
+      "text": "68,397,904",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank13_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 1706,
+      "height": 172
+    },
+    "rank14_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 1902,
+      "tracking": 0,
+      "text": "14",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank14_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 1916,
+      "tracking": 0,
+      "text": "larz57",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank14_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 1980,
+      "tracking": 0,
+      "text": "66,619,371",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank14_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 1888,
+      "height": 172
+    },
+    "rank15_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2084,
+      "tracking": 0,
+      "text": "15",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank15_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 2098,
+      "tracking": 0,
+      "text": "JuanD",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank15_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 2162,
+      "tracking": 0,
+      "text": "66,546,758",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank15_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2070,
+      "height": 172
+    },
+    "rank16_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2266,
+      "tracking": 0,
+      "text": "16",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank16_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 2280,
+      "tracking": 0,
+      "text": "Paul Blart",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank16_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 2344,
+      "tracking": 0,
+      "text": "60,412,887",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank16_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2252,
+      "height": 172
+    },
+    "rank17_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2448,
+      "tracking": 0,
+      "text": "17",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank17_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 2462,
+      "tracking": 0,
+      "text": "Parker",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank17_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 2526,
+      "tracking": 0,
+      "text": "58,193,318",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank17_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2434,
+      "height": 172
+    },
+    "rank18_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2630,
+      "tracking": 0,
+      "text": "18",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank18_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 2644,
+      "tracking": 0,
+      "text": "Waffle",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank18_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 2708,
+      "tracking": 0,
+      "text": "51,870,012",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank18_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2616,
+      "height": 172
+    },
+    "rank19_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2812,
+      "tracking": 0,
+      "text": "19",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank19_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 2826,
+      "tracking": 0,
+      "text": "Eclipse",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank19_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 2890,
+      "tracking": 0,
+      "text": "49,730,103",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank19_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2798,
+      "height": 172
+    },
+    "rank20_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 828,
+      "y": 2994,
+      "tracking": 0,
+      "text": "20",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank20_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1002,
+      "y": 3008,
+      "tracking": 0,
+      "text": "Valhallan",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank20_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1002,
+      "y": 3072,
+      "tracking": 0,
+      "text": "35,106,301",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank20_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 1449,
+      "y": 2980,
+      "height": 172
+    },
+    "rank21_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 1356,
+      "tracking": 0,
+      "text": "21",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank21_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 1370,
+      "tracking": 0,
+      "text": "Emeraude",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank21_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 1434,
+      "tracking": 0,
+      "text": "30,376,262",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank21_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 1342,
+      "height": 172
+    },
+    "rank22_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 1538,
+      "tracking": 0,
+      "text": "22",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank22_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 1552,
+      "tracking": 0,
+      "text": "Val",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank22_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 1616,
+      "tracking": 0,
+      "text": "27,310,622",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank22_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 1524,
+      "height": 172
+    },
+    "rank23_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 1720,
+      "tracking": 0,
+      "text": "23",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank23_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 1734,
+      "tracking": 0,
+      "text": "Kaga",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank23_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 1798,
+      "tracking": 0,
+      "text": "26,895,949",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank23_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 1706,
+      "height": 172
+    },
+    "rank24_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 1902,
+      "tracking": 0,
+      "text": "24",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank24_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 1916,
+      "tracking": 0,
+      "text": "Agent",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank24_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 1980,
+      "tracking": 0,
+      "text": "26,866,055",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank24_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 1888,
+      "height": 172
+    },
+    "rank25_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2084,
+      "tracking": 0,
+      "text": "25",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank25_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 2098,
+      "tracking": 0,
+      "text": "Alu",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank25_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 2162,
+      "tracking": 0,
+      "text": "25,826,479",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank25_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2070,
+      "height": 172
+    },
+    "rank26_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2266,
+      "tracking": 0,
+      "text": "26",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank26_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 2280,
+      "tracking": 0,
+      "text": "BrzanRanz",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank26_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 2344,
+      "tracking": 0,
+      "text": "22,636,594",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank26_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2252,
+      "height": 172
+    },
+    "rank27_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2448,
+      "tracking": 0,
+      "text": "27",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank27_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 2462,
+      "tracking": 0,
+      "text": "FazbearJones",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank27_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 2526,
+      "tracking": 0,
+      "text": "18,603,074",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank27_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2434,
+      "height": 172
+    },
+    "rank28_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2630,
+      "tracking": 0,
+      "text": "28",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank28_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 2644,
+      "tracking": 0,
+      "text": "Enku",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank28_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 2708,
+      "tracking": 0,
+      "text": "16,121,780",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank28_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2616,
+      "height": 172
+    },
+    "rank29_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2812,
+      "tracking": 0,
+      "text": "29",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank29_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 2826,
+      "tracking": 0,
+      "text": "Xena",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank29_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 2890,
+      "tracking": 0,
+      "text": "12,006,023",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank29_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2798,
+      "height": 172
+    },
+    "rank30_num": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 106,
+      "align": "left",
+      "x": 1674,
+      "y": 2994,
+      "tracking": 0,
+      "text": "30",
+      "fill": {
+        "from": "#8C4D21",
+        "to": "#C88A56",
+        "angle": 90
+      },
+      "stroke": {
+        "width": 10,
+        "color": "#FFFFFF"
+      }
+    },
+    "rank30_name": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 54,
+      "align": "left",
+      "x": 1848,
+      "y": 3008,
+      "tracking": 0,
+      "text": "Ariel",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 4,
+        "color": "#000000"
+      }
+    },
+    "rank30_fans": {
+      "type": "text",
+      "font": "fonts/FOT-UDKakugo C80 Pro.ttf",
+      "size": 44,
+      "align": "left",
+      "x": 1848,
+      "y": 3072,
+      "tracking": 0,
+      "text": "3,099,616",
+      "fill": "#FFFFFF",
+      "stroke": {
+        "width": 3,
+        "color": "#000000"
+      }
+    },
+    "rank30_petit": {
+      "type": "petit",
+      "align": "left",
+      "x": 2201,
+      "y": 2980,
+      "height": 172
+    }
+  },
+  "guides": {
+    "show": true,
+    "center_line": true,
+    "thirds": true,
+    "element_boxes": true
+  },
+  "order_groups": {
+    "rest": {
+      "height": 150
+    }
+  }
+}

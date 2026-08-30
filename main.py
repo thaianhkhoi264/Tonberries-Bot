@@ -265,6 +265,8 @@ async def on_message(message: discord.Message):
         await players_module.handle_unlink_command(message, cmd[len("unlink"):].strip())
     elif cmd_lower == "link" or cmd_lower.startswith("link "):
         await players_module.handle_link_command(message, cmd[len("link"):].strip())
+    elif cmd_lower == "render monthly":
+        await _cmd_render_monthly(message)
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -296,6 +298,7 @@ async def _cmd_help(message: discord.Message):
         "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
         "`role cleanup` — Preview empty fan roles (add `now` to delete them)\n"
         "`link` — Link in-game trainers to Discord users (`link list`/`import`/`export`, `link <@user> <name>`, `unlink <name>`)\n"
+        "`render monthly` — Render + DM this month's Fan Leaderboard image\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -482,6 +485,27 @@ async def _cmd_role_cleanup(message: discord.Message, force: bool = False):
             f"{len(names)} empty fan role(s) would be deleted (auto-runs daily "
             f"17:30 UTC; `role cleanup now` to do it now):\n{listing}"
         )
+
+
+async def _cmd_render_monthly(message: discord.Message):
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send("No.")
+        return
+    await message.channel.send("Rendering the Monthly Fan Leaderboard…")
+    try:
+        import io
+        from leaderboard.build import build_monthly_image, image_filename
+        img, label = await asyncio.to_thread(build_monthly_image)
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        buf.seek(0)
+        await message.channel.send(
+            f"**Monthly Fan Leaderboard — {label}**",
+            file=discord.File(buf, filename=image_filename(label)),
+        )
+    except Exception as exc:
+        logger.error(f"[Bot] render monthly failed: {exc}")
+        await message.channel.send(f"Render failed: {exc}")
 
 
 async def _cmd_skill_refresh(message: discord.Message):
