@@ -128,7 +128,10 @@ def character_pool() -> list[tuple[str, str]]:
     return sorted((path, color) for path, color in rows)
 
 
-def _slug_assets(slug: str) -> tuple[str | None, str | None]:
+def slug_assets(slug: str) -> tuple[str | None, str | None]:
+    """(petit_path, image_color) for a character slug."""
+    if not slug:
+        return None, None
     conn = _ro(TRAINEES_DB)
     if conn is None:
         return None, None
@@ -139,6 +142,12 @@ def _slug_assets(slug: str) -> tuple[str | None, str | None]:
             "ORDER BY costume_id LIMIT 1",
             (slug, GENERIC_COSTUME),
         ).fetchone()
+        if not pr:
+            pr = conn.execute(
+                "SELECT normalized_path FROM petit_images_fallback "
+                "WHERE slug=? AND normalized_path IS NOT NULL ORDER BY ordinal LIMIT 1",
+                (slug,),
+            ).fetchone()
         cr = conn.execute(
             "SELECT image_color FROM characters WHERE slug=?", (slug,)
         ).fetchone()
@@ -147,30 +156,82 @@ def _slug_assets(slug: str) -> tuple[str | None, str | None]:
     return (pr[0] if pr else None), (cr[0] if cr and cr[0] else None)
 
 
-def fan_character(trainer_name: str) -> tuple[str | None, str | None]:
-    """(petit_path, image_color) for the member's **most recent** fan character.
-    (None, None) if the trainer isn't linked or holds no fan role."""
+# --- fan-role resolution (from members' actual Discord roles, not just /role) ---
+
+def linked_discord_ids() -> dict[str, int]:
+    """{trainer_name.lower(): discord_user_id} from player_links."""
     conn = _ro(LOCAL_DB)
     if conn is None:
-        return None, None
+        return {}
     try:
-        row = conn.execute(
-            """
-            SELECT cr.character_slug
-            FROM player_links pl
-            JOIN user_character_roles ucr ON ucr.discord_user_id = pl.discord_user_id
-            JOIN character_roles cr
-                 ON cr.guild_id = ucr.guild_id AND cr.role_id = ucr.role_id
-            WHERE pl.trainer_name = ? COLLATE NOCASE AND cr.guild_id = ?
-            ORDER BY ucr.added_at DESC
-            LIMIT 1
-            """,
-            (trainer_name.strip(), MAIN_SERVER_ID),
-        ).fetchone()
+        rows = conn.execute(
+            "SELECT trainer_name, discord_user_id FROM player_links"
+        ).fetchall()
     except sqlite3.OperationalError:
-        row = None
+        return {}
     finally:
         conn.close()
-    if not row or not row[0]:
+    return {name.strip().lower(): int(uid) for name, uid in rows}
+
+
+def fan_role_slugs(guild_id: int = MAIN_SERVER_ID) -> dict[int, str]:
+    """{role_id: character_slug} for every known fan role (character_roles)."""
+    conn = _ro(LOCAL_DB)
+    if conn is None:
+        return {}
+    try:
+        rows = conn.execute(
+            "SELECT role_id, character_slug FROM character_roles "
+            "WHERE guild_id=? AND character_slug IS NOT NULL",
+            (guild_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    finally:
+        conn.close()
+    return {int(rid): slug for rid, slug in rows}
+
+
+def user_fan_role_times(guild_id: int = MAIN_SERVER_ID) -> dict[tuple[int, int], int]:
+    """{(user_id, role_id): added_at} from user_character_roles (only /role-assigned)."""
+    conn = _ro(LOCAL_DB)
+    if conn is None:
+        return {}
+    try:
+        rows = conn.execute(
+            "SELECT user_id, role_id, added_at FROM user_character_roles WHERE guild_id=?",
+            (guild_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    finally:
+        conn.close()
+    return {(int(u), int(r)): int(t) for u, r, t in rows}
+
+
+def resolve_fan_slug(discord_user_id: int | None, held_role_ids: set[int],
+                     role_slugs: dict[int, str],
+                     role_times: dict[tuple[int, int], int]) -> str | None:
+    """The member's fan character slug: their held fan role with the newest
+    `added_at` (falling back to any held fan role, then to a /role-tracked one)."""
+    held = held_role_ids & role_slugs.keys()
+    if held:
+        best = max(held, key=lambda rid: role_times.get((discord_user_id, rid), 0))
+        return role_slugs[best]
+    tracked = [(rid, t) for (u, rid), t in role_times.items()
+               if u == discord_user_id and rid in role_slugs]
+    if tracked:
+        return role_slugs[max(tracked, key=lambda x: x[1])[0]]
+    return None
+
+
+def fan_character(trainer_name: str) -> tuple[str | None, str | None]:
+    """(petit_path, image_color) via /role-tracked assignments only — kept for
+    the calibration sampledata. `build.py` uses the role-based path below."""
+    role_slugs = fan_role_slugs()
+    role_times = user_fan_role_times()
+    uid = linked_discord_ids().get(trainer_name.strip().lower())
+    if uid is None:
         return None, None
-    return _slug_assets(row[0])
+    slug = resolve_fan_slug(uid, set(), role_slugs, role_times)
+    return slug_assets(slug) if slug else (None, None)

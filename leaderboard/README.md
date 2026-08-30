@@ -11,8 +11,8 @@
 |---|---|
 | `layout.json` | the hand-tuned layout |
 | `render.py` | `render(layout, texts, petits, colors) -> (RGBA image, boxes)` |
-| `data.py` | live data: `top_members()`, `fan_character()`, `character_pool()` from `LOCAL_DB` + `TRAINEES_DB` |
-| `build.py` | `build_monthly_image()` — ties data + render together |
+| `data.py` | live data from `LOCAL_DB` + `TRAINEES_DB`: `top_members()`, `monthly_requirement()`, `eliminated_ranks()`, and fan-role resolution (`linked_discord_ids()`, `fan_role_slugs()`, `resolve_fan_slug()`, `slug_assets()`) |
+| `build.py` | `build_monthly_image(member_roles=...)` — ties data + render together |
 
 **Calibration (in `tests/`, gitignored):**
 
@@ -27,8 +27,13 @@
 
 `render monthly` (owner DM) → `build_monthly_image()` → PNG DM'd back. Renders
 the **current month** from `circle_member_snapshots`. Needs `data/trainees.db`
-populated (`trainee refresh`) for petits/colours; unlinked members / members with
-no fan role render in a neutral colour with no petit.
+populated (`trainee refresh`) for petits/colours.
+
+Fan character = the member's linked Discord account (`player_links`) → their
+**current fan roles** (read live from the guild, so manually-assigned roles
+count — not just ones set via `/role`) matched against `character_roles` →
+newest by `user_character_roles.added_at` when tracked. Unlinked members, or
+members holding no known fan role, render in a neutral colour with no petit.
 
 ## Visual editor
 
