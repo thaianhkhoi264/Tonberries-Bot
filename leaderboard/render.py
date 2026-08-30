@@ -42,6 +42,7 @@ ELIM_RED = "#DC2A2A"
 ELIM_RED_DARK = "#5C0E0E"
 ELIM_X = "#5E0C0C"                      # the big crossed-out X (no stroke)
 ELIM_X_MIN_RATIO = 3.5                  # X width : height
+ELIM_X_OVERSHOOT = 0.035                # extend past the number / petit (fraction of span)
 
 
 # ---------------------------------------------------------------------------
@@ -421,8 +422,13 @@ def _strike_eliminated(canvas: Image.Image, boxes: dict[str, Box],
         x1 = (petit[0] + petit[2]) if petit else max(b[0] + b[2] for b in row)
         y0 = min(b[1] for b in row)
         y1 = max(b[1] + b[3] for b in row)
+        # overshoot the number / petit a little — the X glyph has edge padding.
+        ov = round((x1 - x0) * ELIM_X_OVERSHOOT)
+        x0 = max(2, x0 - ov)
+        x1 = min(canvas.width - 2, x1 + ov)
         w = max(1, round(x1 - x0))
-        h = max(1, min(round(y1 - y0), round(w / ELIM_X_MIN_RATIO)))
+        h = max(1, min(round(y1 - y0) + 2 * round(ov * 0.4),
+                       round(w / ELIM_X_MIN_RATIO)))
         y = round(y0 + ((y1 - y0) - h) / 2)
         canvas.alpha_composite(x_glyph.resize((w, h), Image.LANCZOS), (round(x0), y))
 
