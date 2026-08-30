@@ -40,8 +40,8 @@ _RANK_ANY_RE = re.compile(r"^rank(\d+)_(name|fans|num|petit)$")
 ELIM_FONT = "fonts/HelpMe.ttf"          # name + "ELIMINATED" only (number keeps its font)
 ELIM_RED = "#DC2A2A"
 ELIM_RED_DARK = "#5C0E0E"
-ELIM_X = "#8C1616"                      # the big crossed-out X (no stroke)
-ELIM_X_MIN_RATIO = 2.8                  # X width : height
+ELIM_X = "#5E0C0C"                      # the big crossed-out X (no stroke)
+ELIM_X_MIN_RATIO = 3.5                  # X width : height
 
 
 # ---------------------------------------------------------------------------
