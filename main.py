@@ -18,6 +18,7 @@ import skill_sync
 import cm_module
 import parent_module
 import role_module
+import players_module
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +170,7 @@ async def on_ready():
     parent_module.load_parent_data()
     await parent_module.start_background_tasks()
     await role_module.init_db()
+    await players_module.init_db()
     role_module.load_character_cache(force=True)
     _tonberries = bot.get_guild(MAIN_SERVER_ID)
     if _tonberries:
@@ -259,6 +261,10 @@ async def on_message(message: discord.Message):
         await _cmd_trainee_refresh(message)
     elif cmd_lower in ("role cleanup", "role cleanup now"):
         await _cmd_role_cleanup(message, force=cmd_lower.endswith(" now"))
+    elif cmd_lower == "unlink" or cmd_lower.startswith("unlink "):
+        await players_module.handle_unlink_command(message, cmd[len("unlink"):].strip())
+    elif cmd_lower == "link" or cmd_lower.startswith("link "):
+        await players_module.handle_link_command(message, cmd[len("link"):].strip())
     elif cmd_lower == "skill sync":
         await _cmd_skill_sync(message)
     elif cmd_lower == "skill refresh":
@@ -289,6 +295,7 @@ async def _cmd_help(message: discord.Message):
         "`parent refresh` — Re-scrape the GT global character list\n"
         "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
         "`role cleanup` — Preview empty fan roles (add `now` to delete them)\n"
+        "`link` — Link in-game trainers to Discord users (`link list`/`import`/`export`, `link <@user> <name>`, `unlink <name>`)\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
