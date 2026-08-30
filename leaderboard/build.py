@@ -7,6 +7,8 @@ bot's live databases. Called by the `render monthly` owner command.
 
 from __future__ import annotations
 
+import asyncio
+import io
 from datetime import datetime, timezone
 
 from PIL import Image
@@ -58,6 +60,35 @@ def build_monthly_image(*, year: int | None = None, month: int | None = None,
 
 def image_filename(label: str) -> str:
     return f"fan_leaderboard_{label.replace(' ', '_').lower()}.png"
+
+
+def has_data(year: int | None = None, month: int | None = None) -> bool:
+    """Whether any member snapshots exist for the given month."""
+    return bool(data.top_members(year, month))
+
+
+async def render_monthly_png(guild=None, *, year: int | None = None,
+                             month: int | None = None
+                             ) -> tuple[io.BytesIO, str, str]:
+    """Build the leaderboard PNG for a month, off the event loop.
+
+    Resolves each member's current fan roles from the live `guild` (so
+    manually-assigned fan roles count, not just ones set via `/role`).
+    Returns (PNG bytes, filename, month label).
+    """
+    member_roles: dict[int, set[int]] = {}
+    if guild is not None:
+        if not guild.chunked:
+            await guild.chunk()
+        member_roles = {m.id: {r.id for r in m.roles} for m in guild.members}
+
+    img, label = await asyncio.to_thread(
+        build_monthly_image, year=year, month=month, member_roles=member_roles
+    )
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    buf.seek(0)
+    return buf, image_filename(label), label
 
 
 if __name__ == "__main__":   # quick manual check: writes leaderboard_monthly.png

@@ -3,7 +3,8 @@ leaderboard/data.py
 
 Live data for the Monthly Fan Leaderboard image, read from the bot's databases:
 
-  * monthly fan totals   — LOCAL_DB.circle_member_snapshots  (year, month)
+  * monthly fan totals   — LOCAL_DB.circle_monthly_finals  (year, month)
+                            (falls back to circle_member_snapshots)
   * fan character         — LOCAL_DB.player_links / user_character_roles /
                             character_roles  ->  TRAINEES_DB.characters
   * petit image + colour  — TRAINEES_DB.petit_images / characters
@@ -42,23 +43,52 @@ def month_label(year: int | None = None, month: int | None = None) -> str:
 def top_members(year: int | None = None, month: int | None = None,
                 n: int = 30) -> list[tuple[str, int]]:
     """[(trainer_name, monthly_fans)] for the top `n` of the given month
-    (default: current), highest first."""
+    (default: current), highest first.
+
+    Prefers `circle_monthly_finals` (per-month history); falls back to the
+    rolling `circle_member_snapshots` for the current month / older bot state.
+    """
     now = datetime.now(timezone.utc)
     y, m = year or now.year, month or now.month
     conn = _ro(LOCAL_DB)
     if conn is None:
         return []
     try:
-        rows = conn.execute(
-            "SELECT trainer_name, monthly_fans FROM circle_member_snapshots "
-            "WHERE year=? AND month=? ORDER BY monthly_fans DESC LIMIT ?",
-            (y, m, n),
-        ).fetchall()
-    except sqlite3.OperationalError:
-        return []
+        rows: list = []
+        for table in ("circle_monthly_finals", "circle_member_snapshots"):
+            try:
+                rows = conn.execute(
+                    f"SELECT trainer_name, monthly_fans FROM {table} "
+                    "WHERE year=? AND month=? ORDER BY monthly_fans DESC LIMIT ?",
+                    (y, m, n),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                continue
+            if rows:
+                break
     finally:
         conn.close()
     return [(name.strip(), int(fans)) for name, fans in rows]
+
+
+def latest_finalized_month() -> tuple[int, int] | None:
+    """Newest (year, month) in `circle_monthly_finals` that is not the current
+    UTC month — i.e. the most recent month whose totals are settled."""
+    now = datetime.now(timezone.utc)
+    conn = _ro(LOCAL_DB)
+    if conn is None:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT year, month FROM circle_monthly_finals "
+            "WHERE year * 12 + month < ? ORDER BY year DESC, month DESC LIMIT 1",
+            (now.year * 12 + now.month,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        conn.close()
+    return (int(row[0]), int(row[1])) if row else None
 
 
 def monthly_requirement() -> int:
