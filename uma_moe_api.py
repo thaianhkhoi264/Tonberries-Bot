@@ -37,3 +37,28 @@ async def fetch_circle(
                 )
                 resp.raise_for_status()
             return await resp.json()
+
+
+async def fetch_rank_thresholds() -> list[dict]:
+    """Fetch the fan cutoff for each circle rank tier (D through SS).
+
+    Returns the ``thresholds`` list from the API response; each entry has
+    ``name`` (e.g. "A+"), ``ranking_from``/``ranking_to`` and
+    ``current_min_fans`` (the cutoff to sit in that tier).
+    """
+    headers = {"X-API-Key": UMA_MOE_API_KEY} if UMA_MOE_API_KEY else {}
+    timeout = aiohttp.ClientTimeout(total=30)
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(
+            f"{_BASE}/circles/rank-thresholds", headers=headers
+        ) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                logger.error(
+                    f"[UmaMoeAPI] GET /circles/rank-thresholds returned "
+                    f"{resp.status}: {text[:300]}"
+                )
+                resp.raise_for_status()
+            data = await resp.json()
+            return data.get("thresholds", [])

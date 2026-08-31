@@ -367,6 +367,59 @@ def _next_rank_emoji(tier: str) -> str:
     return RANK_EMOJIS.get(next_tier, next_tier)
 
 
+# Tiers shown in the header "Rank Cutoffs" line, highest first.
+# Limited to the six tiers we have emojis for (see RANK_EMOJIS).
+_CUTOFF_TIERS = ("S+", "S", "A+", "A", "B+", "B")
+
+# How long a fan-requirement change stays flagged in the header before the
+# field falls back to just showing the current value.
+REQUIREMENT_CHANGE_NOTICE_DAYS = 30
+
+
+def _build_cutoff_lines(thresholds: list[dict]) -> list[str]:
+    """One line per emoji-backed rank tier: '<emoji> A+ · 3,828,582,298'.
+
+    `thresholds` is the list from uma_moe_api.fetch_rank_thresholds().
+    Tiers with no current cutoff (e.g. D/D+) are skipped.
+    """
+    by_name = {t.get("name"): t for t in (thresholds or [])}
+    lines: list[str] = []
+    for tier in _CUTOFF_TIERS:
+        t = by_name.get(tier)
+        if not t or t.get("current_min_fans") is None:
+            continue
+        emoji = RANK_EMOJIS.get(tier, tier)
+        lines.append(f"{emoji} {tier} · {int(t['current_min_fans']):,}")
+    return lines
+
+
+def _requirement_field_value(req_data: dict | None) -> str:
+    """Header 'Fan Requirement' field: current value plus a recent-change note.
+
+    `req_data` is the dict from get_monthly_requirement()
+    ({"value", "changed_at", "changed_by"}).  The change note is dropped once
+    it is older than REQUIREMENT_CHANGE_NOTICE_DAYS.
+    """
+    data  = req_data or {}
+    value = int(data.get("value", _monthly_requirement))
+    lines = [f"**{value:,}** fans / member"]
+
+    changed_at = data.get("changed_at")
+    if changed_at:
+        try:
+            dt = datetime.fromisoformat(changed_at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - dt).days <= REQUIREMENT_CHANGE_NOTICE_DAYS:
+                by     = data.get("changed_by")
+                suffix = f" by <@{by}>" if by else ""
+                lines.append(f"↳ changed <t:{int(dt.timestamp())}:R>{suffix}")
+        except (ValueError, TypeError):
+            pass
+
+    return "\n".join(lines)
+
+
 def _next_update_ts() -> int:
     """Unix timestamp of the next scheduled refresh (XX:15, XX:35, or XX:55 UTC)."""
     now = datetime.now(timezone.utc)
@@ -438,7 +491,11 @@ def _member_status(gained: int) -> MemberStatus:
 # Embed builders
 # ---------------------------------------------------------------------------
 
-def _build_club_embed(api_data: dict) -> discord.Embed:
+def _build_club_embed(
+    api_data: dict,
+    thresholds: list[dict] | None = None,
+    req_data: dict | None = None,
+) -> discord.Embed:
     circle  = api_data.get("circle", {})
     members = api_data.get("members", [])
 
@@ -483,10 +540,24 @@ def _build_club_embed(api_data: dict) -> discord.Embed:
             inline=True,
         )
     embed.add_field(
+        name="Fan Requirement",
+        value=_requirement_field_value(req_data),
+        inline=False,
+    )
+    embed.add_field(
         name="Next refresh",
         value=f"<t:{next_ts}:F>\n<t:{next_ts}:R>",
         inline=False,
     )
+
+    cutoff_lines = _build_cutoff_lines(thresholds)
+    if cutoff_lines:
+        embed.add_field(
+            name="Rank Cutoffs",
+            value="\n".join(cutoff_lines),
+            inline=False,
+        )
+
     embed.timestamp = last_updated
     embed.set_footer(text="Last updated")
 
@@ -617,29 +688,6 @@ def _build_list_lines(entries: list[dict]) -> list[str]:
     lines   = [_format_list_line(e) for e in sorted(active, key=lambda x: x["daily_needed"], reverse=True)]
     lines  += [_format_list_line(e) for e in sorted(sniped, key=lambda x: x["daily_needed"], reverse=True)]
     return lines
-
-
-def _build_requirement_embed(req_data: dict) -> discord.Embed:
-    value      = req_data.get("value", _monthly_requirement)
-    changed_at = req_data.get("changed_at")
-    changed_by = req_data.get("changed_by")
-
-    embed = discord.Embed(
-        title="Monthly Fan Requirement",
-        description=f"**{value:,}** fans per member",
-        colour=discord.Colour.blurple(),
-    )
-    if changed_at:
-        try:
-            ts = int(datetime.fromisoformat(changed_at).timestamp())
-            embed.add_field(name="Last changed", value=f"<t:{ts}:F>\n<t:{ts}:R>", inline=True)
-        except Exception:
-            pass
-    if changed_by:
-        embed.add_field(name="Changed by", value=f"<@{changed_by}>", inline=True)
-    if not changed_at and not changed_by:
-        embed.set_footer(text="Default value — never manually changed")
-    return embed
 
 
 def _build_watchlist_embed(entries: list[dict]) -> discord.Embed:
@@ -856,43 +904,52 @@ async def post_monthly_leaderboard(year: int | None = None,
         logger.error(f"[Circles] Monthly leaderboard post failed: {exc}")
 
 
-async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
-    """Clean up and reorder tracked circle messages.
-
-    1. Scans channel history and deletes any bot message that is not tracked in
-       the DB (orphans left by crashes or internet drops).
-    2. If the remaining tracked messages are out of order (IDs not ascending in
-       the expected header → members → watchlist → hitlist sequence), deletes
-       them all and clears the DB so the caller can repost them fresh.
-    """
-    # Collect tracked message IDs in expected display order
+async def _tracked_message_ids(conn) -> list[tuple[str, str]]:
+    """(key, message_id) for every tracked dashboard message, in display order."""
     order_keys = ["circle_header_msg"]
     for i in range(20):
         mid = await _get(conn, f"circle_members_msg_{i}")
         if mid is None:
             break
         order_keys.append(f"circle_members_msg_{i}")
-    order_keys += ["circle_watchlist_msg", "circle_hitlist_msg", "circle_req_msg"]
+    order_keys += ["circle_watchlist_msg", "circle_hitlist_msg"]
 
     known: list[tuple[str, str]] = []
     for key in order_keys:
         val = await _get(conn, key)
         if val:
             known.append((key, val))
+    return known
 
-    tracked_ids = {int(v) for _, v in known}
 
-    # Delete orphaned bot messages (not in tracked set)
+async def _sweep_untracked(channel: discord.TextChannel, conn) -> None:
+    """Delete every untracked, non-pinned message — keep the channel dashboard-only.
+
+    Covers bot orphans left by crashes/reconnects as well as stray chatter.
+    Pin a message to exempt it. Safe to call on every refresh (idempotent).
+    """
+    tracked_ids = {int(v) for _, v in await _tracked_message_ids(conn)}
     try:
         async for msg in channel.history(limit=200):
-            if msg.author.id == bot.user.id and msg.id not in tracked_ids:
-                try:
-                    await msg.delete()
-                    logger.info(f"[Circles] Deleted orphaned bot message {msg.id}")
-                except discord.NotFound:
-                    pass
+            if msg.id in tracked_ids or msg.pinned:
+                continue
+            try:
+                await msg.delete()
+                logger.info(
+                    f"[Circles] Deleted untracked message {msg.id} from {msg.author}"
+                )
+            except (discord.NotFound, discord.Forbidden):
+                pass
     except Exception as exc:
         logger.warning(f"[Circles] History scan failed: {exc}")
+
+
+async def _fix_message_order(channel: discord.TextChannel, conn) -> None:
+    """If the tracked messages are out of order (IDs not ascending in the expected
+    header → members → watchlist → hitlist sequence), delete them all and clear
+    the DB so the caller can repost them fresh.
+    """
+    known = await _tracked_message_ids(conn)
 
     # Check ordering of tracked messages — delete all if out of sequence
     ids = [int(v) for _, v in known]
@@ -947,6 +1004,13 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         logger.error(f"[Circles] API fetch failed: {exc}")
         return
 
+    # Rank cutoffs for the header line — best effort, never blocks the report.
+    try:
+        rank_thresholds = await uma_moe_api.fetch_rank_thresholds()
+    except Exception as exc:
+        logger.warning(f"[Circles] Rank-threshold fetch failed: {exc}")
+        rank_thresholds = []
+
     # Save one raw API snapshot per day for troubleshooting
     try:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -969,14 +1033,34 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         stored_last_updated = await _get(conn, "last_circle_updated")
         is_new_data = stored_last_updated != last_updated
 
+        # Keep the dashboard clean even on refreshes where the data is unchanged.
+        await _sweep_untracked(channel, conn)
+
         if not force and not is_new_data:
             logger.debug("[Circles] Data unchanged since last post — skipping")
             return False
 
         await _fix_message_order(channel, conn)
 
+        # The fan requirement (and any recent change to it) now lives in the
+        # header embed — retire the old standalone "Monthly Fan Requirement"
+        # message if one is still tracked.
+        old_req_id = await _get(conn, "circle_req_msg")
+        if old_req_id:
+            try:
+                await channel.get_partial_message(int(old_req_id)).delete()
+            except discord.NotFound:
+                pass
+            await conn.execute(
+                "DELETE FROM circle_messages WHERE key=?", ("circle_req_msg",)
+            )
+
+        req_raw = await _get(conn, "monthly_requirement")
+        req_data: dict = json.loads(req_raw) if req_raw else {"value": _monthly_requirement}
+
         header_id = await _send_or_edit_embed(
-            channel, conn, "circle_header_msg", _build_club_embed(api_data)
+            channel, conn, "circle_header_msg",
+            _build_club_embed(api_data, rank_thresholds, req_data),
         )
         await _set(conn, "circle_header_msg", header_id)
 
@@ -1067,13 +1151,6 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         )
         await _set(conn, "circle_watchlist_msg", wl_id)
         await _set(conn, "circle_hitlist_msg", hl_id)
-
-        req_raw = await _get(conn, "monthly_requirement")
-        req_data: dict = json.loads(req_raw) if req_raw else {"value": _monthly_requirement}
-        req_id = await _send_or_edit_embed(
-            channel, conn, "circle_req_msg", _build_requirement_embed(req_data)
-        )
-        await _set(conn, "circle_req_msg", req_id)
 
         # Persist full list state (active + sniped) for next update's snipe detection
         def _serialise_list(entries: list[dict]) -> str:
