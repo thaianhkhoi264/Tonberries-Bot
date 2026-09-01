@@ -247,6 +247,8 @@ async def on_message(message: discord.Message):
         await _cmd_shutdown(message)
     elif cmd_lower == "circles":
         await _cmd_circles(message)
+    elif cmd_lower == "circle run":
+        await _cmd_circle_run(message)
     elif cmd_lower == "report":
         await _cmd_report(message)
     elif cmd_lower in ("shaming on", "shaming off"):
@@ -289,6 +291,7 @@ async def _cmd_help(message: discord.Message):
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
         "`circles` — Force-refresh the club circle stats\n"
+        "`circle run` — Run the full daily routine now (snapshot + report + monthly leaderboard)\n"
         "`report` — Force-send the daily fan report to you\n"
         "`shaming on/off` — Toggle posting the daily report to uma-chat-v2\n"
         "`fancount` — Show current monthly fan requirement\n"
@@ -298,7 +301,8 @@ async def _cmd_help(message: discord.Message):
         "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
         "`role cleanup` — Preview empty fan roles (add `now` to delete them)\n"
         "`link` — Link in-game trainers to Discord users (`link list`/`import`/`export`, `link <@user> <name>`, `unlink <name>`)\n"
-        "`render monthly` — Render + DM this month's Fan Leaderboard image\n"
+        "`render monthly` — Render + DM the Fan Leaderboard image "
+        "(current in-game month, or the last finished month if it has no data yet)\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
         "`skill refresh` — Re-scrape all skills from GameTora\n"
         "`restart` — Restart Dia :(\n"
@@ -411,6 +415,23 @@ async def _cmd_circles(message: discord.Message):
     except Exception as exc:
         logger.error(f"[Bot] Circles refresh failed: {exc}")
         await message.channel.send(f"Circle refresh failed: {exc}")
+
+
+async def _cmd_circle_run(message: discord.Message):
+    """Run the full daily routine now (snapshot + daily report + monthly
+    leaderboard if a month just wrapped), ignoring the once-per-day guard."""
+    if message.author.id != MAIN_OWNER_ID:
+        await message.channel.send("No.")
+        return
+    await message.channel.send("Running the daily circle update now…")
+    try:
+        ok = await circles_module.run_daily_update(force=True)
+        await message.channel.send(
+            "Done." if ok else "uma.moe was unreachable — nothing sent. Try again shortly."
+        )
+    except Exception as exc:
+        logger.error(f"[Bot] circle run failed: {exc}")
+        await message.channel.send(f"Daily update failed: {exc}")
 
 
 async def _cmd_parent_refresh(message: discord.Message):

@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-from global_config import LOCAL_DB, MAIN_SERVER_ID, TRAINEES_DB
+from global_config import LOCAL_DB, MAIN_SERVER_ID, TRAINEES_DB, game_now
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NEUTRAL_COLOR = "#E9E9EF"
@@ -36,7 +36,7 @@ def _ro(path: str) -> sqlite3.Connection | None:
 
 
 def month_label(year: int | None = None, month: int | None = None) -> str:
-    now = datetime.now(timezone.utc)
+    now = game_now()
     return datetime(year or now.year, month or now.month, 1).strftime("%B %Y")
 
 
@@ -48,7 +48,7 @@ def top_members(year: int | None = None, month: int | None = None,
     Prefers `circle_monthly_finals` (per-month history); falls back to the
     rolling `circle_member_snapshots` for the current month / older bot state.
     """
-    now = datetime.now(timezone.utc)
+    now = game_now()
     y, m = year or now.year, month or now.month
     conn = _ro(LOCAL_DB)
     if conn is None:
@@ -73,8 +73,8 @@ def top_members(year: int | None = None, month: int | None = None,
 
 def latest_finalized_month() -> tuple[int, int] | None:
     """Newest (year, month) in `circle_monthly_finals` that is not the current
-    UTC month — i.e. the most recent month whose totals are settled."""
-    now = datetime.now(timezone.utc)
+    in-game month — i.e. the most recent month whose totals are settled."""
+    now = game_now()
     conn = _ro(LOCAL_DB)
     if conn is None:
         return None

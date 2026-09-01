@@ -13,10 +13,12 @@ import uma_moe_api
 from bot import bot, logger
 from global_config import (
     CIRCLE_CHANNEL_ID,
+    GAME_RESET_UTC_HOUR,
     GENERAL_CHANNEL_ID,
     LOCAL_DB,
     MAIN_SERVER_ID,
     OWNER_USER_IDS,
+    game_now,
 )
 
 # ---------------------------------------------------------------------------
@@ -55,8 +57,16 @@ STATUS_COLORS = {
 
 MAX_EMBEDS_PER_MESSAGE = 10
 
-# uma.moe refreshes ~15:10 UTC daily; we pull 1 h later to be safe
-UPDATE_HOUR_UTC = 16
+# Daily report / snapshot / leaderboard run at 14:55 UTC — just before the
+# 15:00 UTC in-game reset. One uma.moe fetch happens at the top of the run (well
+# before the reset), so the snapshot always catches the finishing game-day; the
+# outgoing messages land right around the boundary, which is the intent.
+UPDATE_HOUR_UTC = 14
+UPDATE_MINUTE_UTC = 55
+
+# `run_daily_update` retry cadence if uma.moe / Discord is briefly unavailable.
+DAILY_RETRY_ATTEMPTS = 3
+DAILY_RETRY_DELAY_S  = 900   # 15 min between loop-level retries
 
 # Manual hitlist lines queued by the "Dia add X to the hitlist" guild command.
 # These are prepended to the "List Changes" section of the next daily report and
@@ -146,6 +156,17 @@ async def init_db() -> None:
         """)
         await _prune_monthly_finals(conn)
 
+        # One-time: the old daily loop keyed `last_report_date` to the UTC
+        # calendar date; the game-clock version keys it to the 15:00-UTC game
+        # day. Clear the stale marker(s) once so the first game-clock run isn't
+        # wrongly skipped by a coincidental date match.
+        if await _get(conn, "game_clock_migrated") != "1":
+            await conn.execute(
+                "DELETE FROM circle_messages "
+                "WHERE key IN ('last_report_date', 'last_leaderboard_month')"
+            )
+            await _set(conn, "game_clock_migrated", "1")
+
         # Load persisted monthly requirement into the module variable
         global _monthly_requirement
         raw = await _get(conn, "monthly_requirement")
@@ -178,7 +199,7 @@ MONTHLY_FINALS_KEEP = 13
 
 
 async def _prune_monthly_finals(conn) -> None:
-    now = datetime.now(timezone.utc)
+    now = game_now()
     cutoff = now.year * 12 + (now.month - 1) - (MONTHLY_FINALS_KEEP - 1)
     await conn.execute(
         "DELETE FROM circle_monthly_finals WHERE year * 12 + (month - 1) < ?",
@@ -187,7 +208,9 @@ async def _prune_monthly_finals(conn) -> None:
 
 
 async def _save_snapshots(conn, members: list[dict]) -> None:
-    now = datetime.now(timezone.utc)
+    stamp = datetime.now(timezone.utc).isoformat()
+    gnow = game_now()               # month bucket follows the in-game day
+    gy, gm = gnow.year, gnow.month
     for m in members:
         vid = m.get("viewer_id")
         if vid is None:
@@ -198,7 +221,7 @@ async def _save_snapshots(conn, members: list[dict]) -> None:
             """INSERT OR REPLACE INTO circle_member_snapshots
                (viewer_id, trainer_name, monthly_fans, saved_at, year, month)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (int(vid), name, gain, now.isoformat(), now.year, now.month),
+            (int(vid), name, gain, stamp, gy, gm),
         )
         # Mirror into the per-month finals. Same month → updated in place; once
         # the month rolls over the old row is a different PK and stays frozen.
@@ -206,12 +229,12 @@ async def _save_snapshots(conn, members: list[dict]) -> None:
             """INSERT OR REPLACE INTO circle_monthly_finals
                (viewer_id, year, month, trainer_name, monthly_fans, saved_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (int(vid), now.year, now.month, name, gain, now.isoformat()),
+            (int(vid), gy, gm, name, gain, stamp),
         )
 
 
 async def _load_snapshots(conn) -> dict:
-    now = datetime.now(timezone.utc)
+    now = game_now()
     snapshots: dict = {}
     async with conn.execute(
         "SELECT viewer_id, trainer_name, monthly_fans FROM circle_member_snapshots "
@@ -293,7 +316,7 @@ def _last_daily_gains(daily_fans: list[int], n: int = 3) -> list[int]:
     daily_fans[i] is cumulative lifetime fans as of day i.  daily_fans[0] may
     be negative — a baseline marker storing the previous month's total negated.
     """
-    now   = datetime.now(timezone.utc)
+    now   = game_now()
     today = now.day
     gains = []
     for day in range(max(1, today - n + 1), today + 1):
@@ -318,7 +341,7 @@ def _classify_lists(members: list[dict]) -> tuple[list[dict], list[dict]]:
     Each entry: {"viewer_id": int, "trainer_name": str, "daily_needed": int, "gains3": list[int]}
     Hitlist takes priority and is checked first.
     """
-    now            = datetime.now(timezone.utc)
+    now            = game_now()
     days_in_month  = calendar.monthrange(now.year, now.month)[1]
     days_remaining = days_in_month - now.day
     daily_quota    = _monthly_requirement // days_in_month
@@ -432,7 +455,7 @@ def _next_update_ts() -> int:
 
 
 def _member_status(gained: int) -> MemberStatus:
-    now            = datetime.now(timezone.utc)
+    now            = game_now()
     days_in_month  = calendar.monthrange(now.year, now.month)[1]
     days_elapsed   = now.day
     days_remaining = days_in_month - days_elapsed
@@ -610,21 +633,32 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
     )
     embed.set_footer(text="Generated")
 
-    now           = datetime.now(timezone.utc)
+    now           = game_now()
     days_in_month = calendar.monthrange(now.year, now.month)[1]
     daily_quota   = _monthly_requirement // days_in_month
 
     goal_met: list[tuple] = []
     behind:   list[tuple] = []
     no_gain:  list[tuple] = []
+    pending:  list[str]   = []   # month just rolled over, upstream not settled
 
     for m in members:
         vid     = m.get("viewer_id")
         name    = m.get("trainer_name", "Unknown")
         current = _monthly_gain(m.get("daily_fans") or [])
         snap    = snapshots.get(int(vid)) if vid is not None else None
-        # No snapshot = first day of month; treat month-start as 0 baseline
-        daily   = current - snap["monthly_fans"] if snap else current
+
+        if snap:
+            daily = current - snap["monthly_fans"]
+        elif current > _monthly_requirement:
+            # No baseline (first report of the month) AND a full-requirement-plus
+            # "gain" — the uma.moe array almost certainly hasn't rolled to the
+            # new month yet. Don't report a bogus daily; wait for the next run.
+            pending.append(name)
+            continue
+        else:
+            # No snapshot = first report of month; month-start is the 0 baseline.
+            daily = current
 
         if daily is not None and daily >= daily_quota:
             goal_met.append((name, daily))
@@ -637,7 +671,7 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
     behind.sort(  key=lambda r: r[1], reverse=True)
     no_gain.sort( key=lambda r: r[1], reverse=True)
 
-    if not goal_met and not behind and not no_gain:
+    if not goal_met and not behind and not no_gain and not pending:
         embed.description = "No members."
         return embed
 
@@ -668,6 +702,14 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
     if no_gain:
         lines = [f"**{name}**" for name, _ in no_gain]
         _add_group_field(embed, f"Did nothing {STATUS_EMOJIS['far_behind']}", lines)
+
+    if pending:
+        _add_group_field(
+            embed,
+            "Month just rolled over ⏳",
+            [f"**{n}**" for n in pending]
+            + ["_Daily totals reset — gains will show in the next report._"],
+        )
 
     return embed
 
@@ -863,12 +905,12 @@ async def send_daily_report(
 
 
 async def post_monthly_leaderboard(year: int | None = None,
-                                   month: int | None = None) -> None:
+                                   month: int | None = None) -> bool:
     """Render and post the Monthly Fan Leaderboard image to the general channel.
 
     With no arguments, posts the most recent *completed* month held in
-    `circle_monthly_finals`. No-op (logged) if that month has no data or the
-    channel is unavailable.
+    `circle_monthly_finals`. Returns True only if the image was actually posted;
+    False (logged) if there's no data, no channel, or the post failed.
     """
     from leaderboard import data as lb_data
     from leaderboard.build import has_data, render_monthly_png
@@ -877,19 +919,19 @@ async def post_monthly_leaderboard(year: int | None = None,
         ym = lb_data.latest_finalized_month()
         if ym is None:
             logger.warning("[Circles] No finalized month available — skipping leaderboard")
-            return
+            return False
         year, month = ym
 
     if not has_data(year, month):
         logger.warning(
             f"[Circles] No snapshots for {year}-{month:02d} — skipping leaderboard"
         )
-        return
+        return False
 
     channel = bot.get_channel(GENERAL_CHANNEL_ID)
     if channel is None:
         logger.error("[Circles] General channel unavailable — skipping leaderboard")
-        return
+        return False
 
     try:
         buf, filename, label = await render_monthly_png(
@@ -900,8 +942,10 @@ async def post_monthly_leaderboard(year: int | None = None,
             file=discord.File(buf, filename=filename),
         )
         logger.info(f"[Circles] Posted {label} Fan Leaderboard")
+        return True
     except Exception as exc:
         logger.error(f"[Circles] Monthly leaderboard post failed: {exc}")
+        return False
 
 
 async def _tracked_message_ids(conn) -> list[tuple[str, str]]:
@@ -989,7 +1033,8 @@ async def refresh_hitlist_embed() -> None:
         logger.warning(f"[Circles] refresh_hitlist_embed failed: {exc}")
 
 
-async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> bool:
+async def post_or_edit(force: bool = False, save_snapshots: bool = False,
+                       api_data: dict | None = None) -> bool:
     if not bot.is_ready():
         return
 
@@ -998,11 +1043,12 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         logger.error("[Circles] Channel not found — check CIRCLE_CHANNEL_ID in global_config.py")
         return
 
-    try:
-        api_data = await uma_moe_api.fetch_circle()
-    except Exception as exc:
-        logger.error(f"[Circles] API fetch failed: {exc}")
-        return
+    if api_data is None:                     # caller may pass a shared fetch
+        try:
+            api_data = await uma_moe_api.fetch_circle()
+        except Exception as exc:
+            logger.error(f"[Circles] API fetch failed: {exc}")
+            return
 
     # Rank cutoffs for the header line — best effort, never blocks the report.
     try:
@@ -1011,9 +1057,9 @@ async def post_or_edit(force: bool = False, save_snapshots: bool = False) -> boo
         logger.warning(f"[Circles] Rank-threshold fetch failed: {exc}")
         rank_thresholds = []
 
-    # Save one raw API snapshot per day for troubleshooting
+    # Save one raw API snapshot per game-day for troubleshooting
     try:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = game_now().strftime("%Y-%m-%d")
         snap_path = os.path.join("logs", "api_snapshots", f"{today}.json")
         if not os.path.exists(snap_path):
             os.makedirs(os.path.dirname(snap_path), exist_ok=True)
@@ -1206,11 +1252,71 @@ async def _circle_hourly_loop() -> None:
             logger.error(f"[Circles] Refresh error: {exc}")
 
 
+_update_lock = asyncio.Lock()   # serialises run_daily_update (loop vs catch-up vs command)
+
+
+async def _fetch_circle_retry(attempts: int = DAILY_RETRY_ATTEMPTS,
+                              delay: float = 30.0) -> dict | None:
+    """`fetch_circle` with a few quick retries; None if all attempts fail."""
+    for i in range(attempts):
+        try:
+            return await uma_moe_api.fetch_circle()
+        except Exception as exc:
+            logger.warning(f"[Circles] fetch_circle {i + 1}/{attempts} failed: {exc}")
+            if i + 1 < attempts:
+                await asyncio.sleep(delay)
+    logger.error("[Circles] fetch_circle failed after retries")
+    return None
+
+
+async def run_daily_update(*, force: bool = False) -> bool:
+    """The once-a-day routine: one uma.moe fetch, then refresh + snapshot the
+    circle, send the daily fan report, and post the monthly leaderboard when a
+    month wraps.
+
+    Keyed to the game-day (15:00 UTC reset). `force` overrides the
+    once-per-game-day guard (the `circle run` command). Returns True on success
+    or a legit skip; False if it should be retried.
+    """
+    async with _update_lock:
+        today = game_now().date().isoformat()      # game-day, not UTC date
+        async with aiosqlite.connect(LOCAL_DB) as conn:
+            old_snapshots = await _load_snapshots(conn)
+            last_report_date = await _get(conn, "last_report_date")
+
+        if not force and last_report_date == today:
+            logger.info("[Circles] Daily update already done for this game-day — skipping")
+            return True
+
+        api_data = await _fetch_circle_retry()
+        if api_data is None:
+            return False                           # let the caller retry
+
+        await post_or_edit(force=True, save_snapshots=True, api_data=api_data)
+        shaming = await get_shaming_enabled()
+        await send_daily_report(
+            list(OWNER_USER_IDS),
+            api_data=api_data,
+            snapshots=old_snapshots,
+            post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
+        )
+
+        await _maybe_post_monthly_leaderboard(force=force)
+
+        async with aiosqlite.connect(LOCAL_DB) as conn:
+            await _set(conn, "last_report_date", today)
+            await conn.commit()
+        logger.info(f"[Circles] Daily update complete for game-day {today}")
+        return True
+
+
 async def _circle_update_loop() -> None:
-    """Send the daily fan report once per day at UPDATE_HOUR_UTC."""
+    """Run `run_daily_update` once per game-day at 14:55 UTC — just before the
+    15:00 UTC reset, so the fetch catches the finishing game-day in full."""
     while True:
         now          = datetime.now(timezone.utc)
-        today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=0, second=0, microsecond=0)
+        today_update = now.replace(hour=UPDATE_HOUR_UTC, minute=UPDATE_MINUTE_UTC,
+                                   second=0, microsecond=0)
         next_run     = today_update if now < today_update else today_update + timedelta(days=1)
 
         wait_secs = (next_run - now).total_seconds()
@@ -1220,38 +1326,76 @@ async def _circle_update_loop() -> None:
         )
         await asyncio.sleep(wait_secs)
 
-        try:
-            today = datetime.now(timezone.utc).date().isoformat()
-            async with aiosqlite.connect(LOCAL_DB) as conn:
-                old_snapshots = await _load_snapshots(conn)
-                last_report_date = await _get(conn, "last_report_date")
+        for attempt in range(1 + DAILY_RETRY_ATTEMPTS):
+            try:
+                if await run_daily_update():
+                    break
+            except Exception as exc:
+                logger.error(f"[Circles] Daily update error (attempt {attempt + 1}): {exc}")
+            # Only keep retrying while we're still before the 15:00 UTC reset —
+            # a retry after it would snapshot the *next* game-day/month.
+            if (attempt < DAILY_RETRY_ATTEMPTS
+                    and datetime.now(timezone.utc).hour < GAME_RESET_UTC_HOUR):
+                await asyncio.sleep(DAILY_RETRY_DELAY_S)
+            else:
+                break
 
-            if last_report_date == today:
-                logger.info("[Circles] Daily report already sent today — skipping")
-                continue
 
-            # First report of a new month → also post last month's leaderboard.
-            first_of_month = (
-                last_report_date is not None
-                and last_report_date[:7] != today[:7]
-            )
+async def _startup_catchup() -> None:
+    """After a restart, run the daily update if a scheduled 14:55 UTC slot was
+    missed while the bot was down. Skips a fresh/cleared `last_report_date`
+    (no prior state) so the scheduled loop takes the first, well-timed run."""
+    await asyncio.sleep(90)   # let the bot settle / guild cache warm up
+    now  = datetime.now(timezone.utc)
+    slot = now.replace(hour=UPDATE_HOUR_UTC, minute=UPDATE_MINUTE_UTC,
+                       second=0, microsecond=0)
+    if now < slot:
+        slot -= timedelta(days=1)             # most recent slot that has passed
+    expected = (slot - timedelta(hours=GAME_RESET_UTC_HOUR)).date().isoformat()
 
-            await post_or_edit(force=True, save_snapshots=True)
-            shaming = await get_shaming_enabled()
-            await send_daily_report(
-                list(OWNER_USER_IDS),
-                snapshots=old_snapshots,
-                post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
-            )
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        last_report_date = await _get(conn, "last_report_date")
 
-            if first_of_month:
-                await post_monthly_leaderboard()
+    if last_report_date is None or last_report_date >= expected:
+        return
 
-            async with aiosqlite.connect(LOCAL_DB) as conn:
-                await _set(conn, "last_report_date", today)
-                await conn.commit()
-        except Exception as exc:
-            logger.error(f"[Circles] Loop error: {exc}")
+    logger.info(f"[Circles] Startup catch-up: last_report_date={last_report_date} "
+                f"< expected {expected} — running the daily update now")
+    try:
+        await run_daily_update()
+    except Exception as exc:
+        logger.error(f"[Circles] Startup catch-up failed: {exc}")
+
+
+async def _maybe_post_monthly_leaderboard(*, force: bool = False) -> None:
+    """Post a month's Fan Leaderboard once, right after that month finishes.
+
+    On the final game-day of a month the snapshot just taken this run is that
+    month's (near-)final, so post it now; otherwise catch up on the most recent
+    fully-finalised month. `last_leaderboard_month` makes the scheduled call
+    idempotent (and is only set on a confirmed post); `force` (the `circle run`
+    command) re-posts regardless.
+    """
+    from leaderboard import data as lb_data
+
+    gnow = game_now()
+    last_day = calendar.monthrange(gnow.year, gnow.month)[1]
+    if gnow.day == last_day:
+        target = (gnow.year, gnow.month)              # month ending today
+    else:
+        target = lb_data.latest_finalized_month()     # already-finished month
+    if target is None:
+        return
+
+    tag = f"{target[0]}-{target[1]:02d}"
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        if not force and await _get(conn, "last_leaderboard_month") == tag:
+            return
+
+    if await post_monthly_leaderboard(target[0], target[1]):
+        async with aiosqlite.connect(LOCAL_DB) as conn:
+            await _set(conn, "last_leaderboard_month", tag)
+            await conn.commit()
 
 
 async def start_background_task() -> None:
@@ -1259,4 +1403,5 @@ async def start_background_task() -> None:
     await post_or_edit(force=True)
     asyncio.create_task(_circle_hourly_loop())
     asyncio.create_task(_circle_update_loop())
+    asyncio.create_task(_startup_catchup())
     logger.info("[Circles] Background tasks started")

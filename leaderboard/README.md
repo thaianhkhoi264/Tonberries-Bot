@@ -26,22 +26,34 @@
 ## Bot command / auto-post
 
 `render monthly` (owner DM) → `build.render_monthly_png()` → PNG DM'd back.
-Renders the **current month**. Needs `data/trainees.db` populated
+Renders the **current in-game month** — or the last finished month if the current
+one has no data yet (just after a reset). Needs `data/trainees.db` populated
 (`trainee refresh`) for petits/colours.
 
-**Automatic:** `circles_module._circle_update_loop` posts the most recent
-**completed** month's leaderboard to `GENERAL_CHANNEL_ID` right after the first
-daily report of a new month (detected by `last_report_date` crossing a month
-boundary). Posts unconditionally (not gated on the shaming toggle); skipped with
-a log warning if that month has no data. `circles_module.post_monthly_leaderboard()`
-(no args → `data.latest_finalized_month()`) does the work.
+**Automatic:** `circles_module._maybe_post_monthly_leaderboard` (called from
+`run_daily_update`, which the loop fires at 14:55 UTC) posts a month's board to
+`GENERAL_CHANNEL_ID` **once**, on the last game-day of that month — that run's
+snapshot is the month's (near-)final. If the bot missed that day it catches up
+via `data.latest_finalized_month()`. `last_leaderboard_month` in
+`circle_messages` is the idempotency guard, set only after a confirmed post
+(`post_monthly_leaderboard` returns `bool`). Posts unconditionally (not gated on
+the shaming toggle); skipped with a log warning if the month has no data.
+
+### The game-day clock (15:00 UTC)
+
+Fan counts reset at **15:00 UTC**, not UTC midnight. `data.month_label()`,
+`top_members()` and `latest_finalized_month()` all key off
+`global_config.game_now()` (`now - 15h`), matching `circles_module`. So on
+Sept 1 before 15:00 UTC, "current month" is still August.
 
 ### Where the monthly totals come from
 
 `circle_member_snapshots` keeps only **one row per member** (rolling, overwritten
 every daily run), so it can't answer "what were August's finals?". Every daily
 save now *also* writes `circle_monthly_finals` — keyed by `(viewer_id, year,
-month)`, so once a month passes its row is frozen. `data.top_members(year,
+month)` in the game-day clock, so once a month passes its row is frozen. The
+14:55 UTC run timing means that frozen row is the month's real end total (the
+final game-day included), not "as of some point mid-day-31". `data.top_members(year,
 month)` reads `circle_monthly_finals` first and falls back to
 `circle_member_snapshots`. `circles_module` seeds `circle_monthly_finals` from
 the current snapshots on startup (`INSERT OR IGNORE`) and prunes to the last 13
@@ -196,5 +208,5 @@ The editor snaps drags to x = ¼, ⅓, ½, ⅔, ¾ of the canvas (600 / 800 / 12
 - [x] ranks 11–30 — brown rank number + left-aligned name/fans (cols 2 & 3)
 - [x] per-row fan petit image (`rank{N}_petit`); random for now, `fan_petit` live
 - [ ] background
-- [x] wire into the bot — `render monthly` owner DM + auto-post of the previous
-      month on the first daily report of each new month
+- [x] wire into the bot — `render monthly` owner DM + auto-post on the last
+      game-day of each month (14:55 UTC), idempotent via `last_leaderboard_month`
