@@ -42,7 +42,8 @@ ELIM_RED = "#DC2A2A"
 ELIM_RED_DARK = "#5C0E0E"
 ELIM_X = "#5E0C0C"                      # the big crossed-out X (no stroke)
 ELIM_X_MIN_RATIO = 3.5                  # X width : height
-ELIM_X_OVERSHOOT = 0.035                # extend past the number / petit (fraction of span)
+ELIM_X_OVERSHOOT = 0.03                 # how far the *visible* X reaches past marker / petit
+ELIM_X_DEAD = 0.13                      # faint stroke-tip margin on each side of the cropped glyph
 
 
 # ---------------------------------------------------------------------------
@@ -414,14 +415,21 @@ def render(layout: dict, texts: dict[str, str] | None = None,
 def _strike_eliminated(canvas: Image.Image, boxes: dict[str, Box],
                        eliminated: set[int]) -> None:
     """A big flat "X" (HelpMe-font slashes, stretched, no stroke) crossed over
-    each eliminated member's row, from the rank number across to the petit.
-    Kept wide (>= ELIM_X_MIN_RATIO : 1) and vertically centred so the red name
-    stays readable above/below it."""
+    each eliminated member's row, from the rank marker across to the petit — the
+    marker being the 11-30 rank number, or the 1-10 着 badge. Kept wide
+    (>= ELIM_X_MIN_RATIO : 1) and vertically centred so the red name stays
+    readable above/below it."""
     x_glyph = render_text_layer("X", {"font": ELIM_FONT, "size": 200,
                                       "tracking": 0, "fill": ELIM_X})
+    bb = x_glyph.getbbox()
+    if bb:
+        x_glyph = x_glyph.crop(bb)
     for rank in eliminated:
         row = [b for k in ("num", "name", "fans")
                if (b := boxes.get(f"rank{rank}_{k}"))]
+        badge = boxes.get(f"order_{rank - 1:02d}") if rank <= 10 else None
+        if badge:
+            row.append(badge)               # 1-10: start the X over the 着 badge
         if not row:
             continue
         petit = boxes.get(f"rank{rank}_petit")
@@ -429,15 +437,24 @@ def _strike_eliminated(canvas: Image.Image, boxes: dict[str, Box],
         x1 = (petit[0] + petit[2]) if petit else max(b[0] + b[2] for b in row)
         y0 = min(b[1] for b in row)
         y1 = max(b[1] + b[3] for b in row)
-        # overshoot the number / petit a little — the X glyph has edge padding.
-        ov = round((x1 - x0) * ELIM_X_OVERSHOOT)
-        x0 = max(2, x0 - ov)
-        x1 = min(canvas.width - 2, x1 + ov)
-        w = max(1, round(x1 - x0))
-        h = max(1, min(round(y1 - y0) + 2 * round(ov * 0.4),
-                       round(w / ELIM_X_MIN_RATIO)))
-        y = round(y0 + ((y1 - y0) - h) / 2)
-        canvas.alpha_composite(x_glyph.resize((w, h), Image.LANCZOS), (round(x0), y))
+
+        span = max(1, x1 - x0)
+        # The dense middle of the X should cover x0..x1 plus a little overshoot;
+        # the cropped glyph still carries ELIM_X_DEAD of faint stroke-tip on each
+        # side, so scale up and shift left to compensate.
+        h = max(1, min(round(y1 - y0) + round(span * ELIM_X_OVERSHOOT),
+                       round(span / ELIM_X_MIN_RATIO)))
+        draw_w = max(1, round(span * (1 + 2 * ELIM_X_OVERSHOOT) / (1 - 2 * ELIM_X_DEAD)))
+        draw_x = round(x0 - span * ELIM_X_OVERSHOOT - draw_w * ELIM_X_DEAD)
+        y = max(0, round(y0 + ((y1 - y0) - h) / 2))
+
+        layer = x_glyph.resize((draw_w, h), Image.LANCZOS)
+        cl = max(0, -draw_x)
+        cr = max(0, draw_x + draw_w - canvas.width)
+        if cl or cr:
+            layer = layer.crop((cl, 0, draw_w - cr, h))
+            draw_x = max(0, draw_x)
+        canvas.alpha_composite(layer, (draw_x, y))
 
 
 def _draw_guides(canvas: Image.Image, gcfg: dict, boxes: dict[str, Box]) -> None:

@@ -27,7 +27,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NEUTRAL_COLOR = "#E9E9EF"
 GENERIC_COSTUME = "000101"   # generic default petit — skipped
 DEFAULT_REQUIREMENT = 20_000_000
-ELIM_RANK_FLOOR = 20         # only ranks >= this can be "eliminated"
 
 
 def _ro(path: str) -> sqlite3.Connection | None:
@@ -113,9 +112,9 @@ def monthly_requirement() -> int:
 
 
 def eliminated_ranks(members: list[tuple[str, int]], requirement: int) -> set[int]:
-    """Ranks (>= ELIM_RANK_FLOOR) whose monthly fans fell below `requirement`."""
-    return {i for i, (_, fans) in enumerate(members, 1)
-            if i >= ELIM_RANK_FLOOR and fans < requirement}
+    """Every rank whose monthly fans fell below `requirement` — any rank, up to
+    1st place: if the whole club misses goal, the whole board is eliminated."""
+    return {i for i, (_, fans) in enumerate(members, 1) if fans < requirement}
 
 
 @lru_cache(maxsize=1)
