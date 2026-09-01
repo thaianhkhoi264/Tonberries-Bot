@@ -1,6 +1,22 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 # Tonberries-Bot Configuration
+
+# The Umamusume global server's daily reset is 15:00 UTC. Fan counts (daily and
+# monthly) roll over then, not at the UTC calendar midnight — so every "what day
+# / month is it" decision in the circle code is keyed to this shifted clock.
+GAME_RESET_UTC_HOUR = 15
+
+
+def game_now() -> datetime:
+    """`datetime.now(UTC)` shifted back into the current in-game day.
+
+    Between 00:00 and 15:00 UTC this still returns "yesterday"; at/after 15:00
+    UTC it flips to the new game day. Use `.year` / `.month` / `.day` / `.date()`
+    off this for buckets; keep real `datetime.now(timezone.utc)` for timestamps.
+    """
+    return datetime.now(timezone.utc) - timedelta(hours=GAME_RESET_UTC_HOUR)
 
 OWNER_USER_IDS          = (680653908259110914, 320398342830030849)  # Discord user IDs allowed to DM-command the bot
 MAIN_OWNER_ID           = 680653908259110914   # Primary owner — receives restart DMs, exclusive hitlist access

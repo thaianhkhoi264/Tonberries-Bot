@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 import aiosqlite
 import discord
 
-from global_config import LOCAL_DB
+from global_config import LOCAL_DB, game_now
 
 logger = logging.getLogger("players_module")
 
@@ -128,7 +128,7 @@ def _parse_user_id(token: str) -> int | None:
 
 async def _current_month_roster() -> list[str]:
     """Distinct trainer names from this month's circle_member_snapshots."""
-    now = datetime.now(timezone.utc)
+    now = game_now()
     try:
         async with aiosqlite.connect(LOCAL_DB) as conn:
             async with conn.execute(

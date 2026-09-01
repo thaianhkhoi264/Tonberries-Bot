@@ -28,7 +28,17 @@ def build_monthly_image(*, year: int | None = None, month: int | None = None,
     used `/role` resolve.
 
     Returns (RGBA image, month label e.g. "August 2026").
+
+    With no month given, uses the current in-game month — or, if that month has
+    no data yet (e.g. just after a reset), the most recent finished month.
     """
+    if year is None and month is None:
+        members = data.top_members()
+        if not members:
+            fin = data.latest_finalized_month()
+            if fin:
+                year, month = fin
+
     layout = render.load_layout()
     label = data.month_label(year, month)
     members = data.top_members(year, month)

@@ -367,7 +367,14 @@ def render(layout: dict, texts: dict[str, str] | None = None,
         elim = rank in eliminated
 
         if etype == "text":
-            content = texts.get(name) or spec.get("text") or name
+            if name in texts:
+                content = texts[name]
+            elif kind == "num" and f"rank{rank}_name" in texts:
+                content = str(rank)          # rank number for a row that has a member
+            elif kind in ("name", "fans", "num"):
+                continue                     # no member for this row → draw nothing
+            else:
+                content = spec.get("text") or name
             if elim:
                 spec = dict(spec)
                 spec["fill"] = ELIM_RED

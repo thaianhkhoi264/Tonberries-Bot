@@ -65,7 +65,6 @@
       "x": 972,
       "y": 616,
       "tracking": 0,
-      "text": "Cluuto",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 8,
@@ -80,7 +79,6 @@
       "x": 972,
       "y": 752,
       "tracking": 0,
-      "text": "286,962,712",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 7,
@@ -110,7 +108,6 @@
       "x": 435,
       "y": 1011,
       "tracking": 0,
-      "text": "caeruleum",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 6,
@@ -125,7 +122,6 @@
       "x": 435,
       "y": 1107,
       "tracking": 0,
-      "text": "201,096,588",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -155,7 +151,6 @@
       "x": 1636,
       "y": 1011,
       "tracking": 0,
-      "text": "Auxlley",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 6,
@@ -170,7 +165,6 @@
       "x": 1636,
       "y": 1107,
       "tracking": 0,
-      "text": "127,195,813",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -200,7 +194,6 @@
       "x": 335,
       "y": 1372,
       "tracking": 0,
-      "text": "PresTeal",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -215,7 +208,6 @@
       "x": 335,
       "y": 1450,
       "tracking": 0,
-      "text": "117,103,388",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -245,7 +237,6 @@
       "x": 335,
       "y": 1602,
       "tracking": 0,
-      "text": "Mascha",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -260,7 +251,6 @@
       "x": 335,
       "y": 1680,
       "tracking": 0,
-      "text": "112,450,371",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -290,7 +280,6 @@
       "x": 335,
       "y": 1832,
       "tracking": 0,
-      "text": "Ashtran",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -305,7 +294,6 @@
       "x": 335,
       "y": 1910,
       "tracking": 0,
-      "text": "100,887,474",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -335,7 +323,6 @@
       "x": 335,
       "y": 2062,
       "tracking": 0,
-      "text": "Lilly",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -350,7 +337,6 @@
       "x": 335,
       "y": 2140,
       "tracking": 0,
-      "text": "96,505,804",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -380,7 +366,6 @@
       "x": 335,
       "y": 2292,
       "tracking": 0,
-      "text": "eevee",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -395,7 +380,6 @@
       "x": 335,
       "y": 2370,
       "tracking": 0,
-      "text": "96,395,511",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -425,7 +409,6 @@
       "x": 335,
       "y": 2522,
       "tracking": 0,
-      "text": "Exajeel",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -440,7 +423,6 @@
       "x": 335,
       "y": 2600,
       "tracking": 0,
-      "text": "96,283,042",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -470,7 +452,6 @@
       "x": 335,
       "y": 2752,
       "tracking": 0,
-      "text": "Sealgyu",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 5,
@@ -485,7 +466,6 @@
       "x": 335,
       "y": 2830,
       "tracking": 0,
-      "text": "84,501,369",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -507,7 +487,6 @@
       "x": 828,
       "y": 1356,
       "tracking": 0,
-      "text": "11",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -526,7 +505,6 @@
       "x": 1002,
       "y": 1370,
       "tracking": 0,
-      "text": "badgame",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -541,7 +519,6 @@
       "x": 1002,
       "y": 1434,
       "tracking": 0,
-      "text": "82,821,798",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -563,7 +540,6 @@
       "x": 828,
       "y": 1538,
       "tracking": 0,
-      "text": "12",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -582,7 +558,6 @@
       "x": 1002,
       "y": 1552,
       "tracking": 0,
-      "text": "Kosmo",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -597,7 +572,6 @@
       "x": 1002,
       "y": 1616,
       "tracking": 0,
-      "text": "68,637,153",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -619,7 +593,6 @@
       "x": 828,
       "y": 1720,
       "tracking": 0,
-      "text": "13",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -638,7 +611,6 @@
       "x": 1002,
       "y": 1734,
       "tracking": 0,
-      "text": "Sextono Diamond",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -653,7 +625,6 @@
       "x": 1002,
       "y": 1798,
       "tracking": 0,
-      "text": "68,397,904",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -675,7 +646,6 @@
       "x": 828,
       "y": 1902,
       "tracking": 0,
-      "text": "14",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -694,7 +664,6 @@
       "x": 1002,
       "y": 1916,
       "tracking": 0,
-      "text": "larz57",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -709,7 +678,6 @@
       "x": 1002,
       "y": 1980,
       "tracking": 0,
-      "text": "66,619,371",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -731,7 +699,6 @@
       "x": 828,
       "y": 2084,
       "tracking": 0,
-      "text": "15",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -750,7 +717,6 @@
       "x": 1002,
       "y": 2098,
       "tracking": 0,
-      "text": "JuanD",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -765,7 +731,6 @@
       "x": 1002,
       "y": 2162,
       "tracking": 0,
-      "text": "66,546,758",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -787,7 +752,6 @@
       "x": 828,
       "y": 2266,
       "tracking": 0,
-      "text": "16",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -806,7 +770,6 @@
       "x": 1002,
       "y": 2280,
       "tracking": 0,
-      "text": "Paul Blart",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -821,7 +784,6 @@
       "x": 1002,
       "y": 2344,
       "tracking": 0,
-      "text": "60,412,887",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -843,7 +805,6 @@
       "x": 828,
       "y": 2448,
       "tracking": 0,
-      "text": "17",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -862,7 +823,6 @@
       "x": 1002,
       "y": 2462,
       "tracking": 0,
-      "text": "Parker",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -877,7 +837,6 @@
       "x": 1002,
       "y": 2526,
       "tracking": 0,
-      "text": "58,193,318",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -899,7 +858,6 @@
       "x": 828,
       "y": 2630,
       "tracking": 0,
-      "text": "18",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -918,7 +876,6 @@
       "x": 1002,
       "y": 2644,
       "tracking": 0,
-      "text": "Waffle",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -933,7 +890,6 @@
       "x": 1002,
       "y": 2708,
       "tracking": 0,
-      "text": "51,870,012",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -955,7 +911,6 @@
       "x": 828,
       "y": 2812,
       "tracking": 0,
-      "text": "19",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -974,7 +929,6 @@
       "x": 1002,
       "y": 2826,
       "tracking": 0,
-      "text": "Eclipse",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -989,7 +943,6 @@
       "x": 1002,
       "y": 2890,
       "tracking": 0,
-      "text": "49,730,103",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1011,7 +964,6 @@
       "x": 828,
       "y": 2994,
       "tracking": 0,
-      "text": "20",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1030,7 +982,6 @@
       "x": 1002,
       "y": 3008,
       "tracking": 0,
-      "text": "Valhallan",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1045,7 +996,6 @@
       "x": 1002,
       "y": 3072,
       "tracking": 0,
-      "text": "35,106,301",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1067,7 +1017,6 @@
       "x": 1674,
       "y": 1356,
       "tracking": 0,
-      "text": "21",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1086,7 +1035,6 @@
       "x": 1848,
       "y": 1370,
       "tracking": 0,
-      "text": "Emeraude",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1101,7 +1049,6 @@
       "x": 1848,
       "y": 1434,
       "tracking": 0,
-      "text": "30,376,262",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1123,7 +1070,6 @@
       "x": 1674,
       "y": 1538,
       "tracking": 0,
-      "text": "22",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1142,7 +1088,6 @@
       "x": 1848,
       "y": 1552,
       "tracking": 0,
-      "text": "Val",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1157,7 +1102,6 @@
       "x": 1848,
       "y": 1616,
       "tracking": 0,
-      "text": "27,310,622",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1179,7 +1123,6 @@
       "x": 1674,
       "y": 1720,
       "tracking": 0,
-      "text": "23",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1198,7 +1141,6 @@
       "x": 1848,
       "y": 1734,
       "tracking": 0,
-      "text": "Kaga",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1213,7 +1155,6 @@
       "x": 1848,
       "y": 1798,
       "tracking": 0,
-      "text": "26,895,949",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1235,7 +1176,6 @@
       "x": 1674,
       "y": 1902,
       "tracking": 0,
-      "text": "24",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1254,7 +1194,6 @@
       "x": 1848,
       "y": 1916,
       "tracking": 0,
-      "text": "Agent",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1269,7 +1208,6 @@
       "x": 1848,
       "y": 1980,
       "tracking": 0,
-      "text": "26,866,055",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1291,7 +1229,6 @@
       "x": 1674,
       "y": 2084,
       "tracking": 0,
-      "text": "25",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1310,7 +1247,6 @@
       "x": 1848,
       "y": 2098,
       "tracking": 0,
-      "text": "Alu",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1325,7 +1261,6 @@
       "x": 1848,
       "y": 2162,
       "tracking": 0,
-      "text": "25,826,479",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1347,7 +1282,6 @@
       "x": 1674,
       "y": 2266,
       "tracking": 0,
-      "text": "26",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1366,7 +1300,6 @@
       "x": 1848,
       "y": 2280,
       "tracking": 0,
-      "text": "BrzanRanz",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1381,7 +1314,6 @@
       "x": 1848,
       "y": 2344,
       "tracking": 0,
-      "text": "22,636,594",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1403,7 +1335,6 @@
       "x": 1674,
       "y": 2448,
       "tracking": 0,
-      "text": "27",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1422,7 +1353,6 @@
       "x": 1848,
       "y": 2462,
       "tracking": 0,
-      "text": "FazbearJones",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1437,7 +1367,6 @@
       "x": 1848,
       "y": 2526,
       "tracking": 0,
-      "text": "18,603,074",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1459,7 +1388,6 @@
       "x": 1674,
       "y": 2630,
       "tracking": 0,
-      "text": "28",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1478,7 +1406,6 @@
       "x": 1848,
       "y": 2644,
       "tracking": 0,
-      "text": "Enku",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1493,7 +1420,6 @@
       "x": 1848,
       "y": 2708,
       "tracking": 0,
-      "text": "16,121,780",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1515,7 +1441,6 @@
       "x": 1674,
       "y": 2812,
       "tracking": 0,
-      "text": "29",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1534,7 +1459,6 @@
       "x": 1848,
       "y": 2826,
       "tracking": 0,
-      "text": "Xena",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1549,7 +1473,6 @@
       "x": 1848,
       "y": 2890,
       "tracking": 0,
-      "text": "12,006,023",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
@@ -1571,7 +1494,6 @@
       "x": 1674,
       "y": 2994,
       "tracking": 0,
-      "text": "30",
       "fill": {
         "from": "#8C4D21",
         "to": "#C88A56",
@@ -1590,7 +1512,6 @@
       "x": 1848,
       "y": 3008,
       "tracking": 0,
-      "text": "Ariel",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 4,
@@ -1605,7 +1526,6 @@
       "x": 1848,
       "y": 3072,
       "tracking": 0,
-      "text": "3,099,616",
       "fill": "#FFFFFF",
       "stroke": {
         "width": 3,
