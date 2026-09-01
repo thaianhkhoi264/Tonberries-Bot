@@ -177,10 +177,13 @@ when they look like one). Dotted keys index into `elements`, e.g.
   - ranks 11–30: same, but the stroke width is scaled to `0.7×`
   - no linked Discord account **or no fan role** → neutral silvery colour, no petit
 - Petit selection skips the generic default costume (`costume_id == '000101'`).
-- **Eliminated** (rank ≥ 20 **and** monthly fans below the requirement, from
-  `circle_messages.monthly_requirement`): name + number in red **HelpMe** font,
-  fan count → `ELIMINATED`, petit grayscaled + flipped upside-down, and a big
-  stretched red "X" (HelpMe glyph) crossed from the number to the petit.
+- **Eliminated** (monthly fans below `circle_messages.monthly_requirement` —
+  **any rank, up to 1st place**: if the whole club misses goal the whole board
+  is struck out): name + number in red **HelpMe** font, fan count → `ELIMINATED`,
+  petit grayscaled + flipped upside-down, and a big stretched red "X" (HelpMe
+  glyph) crossed from the rank marker — the 11-30 number or the 1-10 着 badge —
+  across to the petit. `_strike_eliminated` compensates for the glyph's faint
+  stroke-tips (`ELIM_X_DEAD`) so the visible X actually reaches the marker.
   `render(..., eliminated={ranks})`; the test render uses a 25 M requirement.
 - `stroke` in a text spec may be a **list** of stroke specs — each `width` is
   measured from the glyph edge and they paint widest-first, so `[{outer},{inner}]`
