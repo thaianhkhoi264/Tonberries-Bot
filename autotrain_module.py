@@ -2,9 +2,12 @@
 Auto-train reminder module.
 
 Any Discord user can DM the bot:
-  auto [text]      — start a 49m 30s countdown timer (text is optional)
-  autotrain [text] — same as above
-  renew            — repeat the last timer with the same text
+  auto [text] [mm:ss] — start a countdown timer (both parts optional). With no
+                        time it runs the full 49m 30s; `auto grind 33:52` starts
+                        a 33m 52s timer for "grind" (use when the in-game
+                        cooldown is already partway through).
+  autotrain [text] [mm:ss] — same as above
+  renew            — repeat the last timer with the same text (full duration)
   end              — finish the running timer early
 
 On completion the timer message is deleted and a completion DM is sent.
@@ -14,6 +17,7 @@ Supports any number of concurrent users.
 """
 
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
@@ -23,6 +27,27 @@ from bot import bot, logger
 from global_config import LOCAL_DB
 
 TIMER_DURATION = timedelta(minutes=49, seconds=30)
+
+# Optional trailing "mm:ss" on `auto [text] [mm:ss]` — minutes 0-99, seconds 00-59.
+_DURATION_RE = re.compile(r"^(\d{1,2}):([0-5]\d)$")
+
+
+def _split_duration(text: str) -> tuple[str, timedelta | None]:
+    """Pull an optional trailing `mm:ss` off `text`.
+
+    Returns (text_without_time, duration) — duration is None when there's no
+    valid trailing time, or when it works out to zero.
+    """
+    stripped = text.strip()
+    head, _, tail = stripped.rpartition(" ")
+    m = _DURATION_RE.match(tail or stripped)
+    if not m:
+        return text, None
+    total = int(m.group(1)) * 60 + int(m.group(2))
+    if total <= 0:
+        return text, None
+    return (head.strip() if tail else ""), timedelta(seconds=total)
+
 
 # Active asyncio tasks keyed by user_id — lets us cancel on re-trigger
 _active_tasks: dict[int, asyncio.Task] = {}
@@ -160,8 +185,8 @@ def _schedule(user_id: int, text: str, ends_at: datetime, timer_msg_id: int | No
 # ---------------------------------------------------------------------------
 
 async def handle_auto(message: discord.Message, text: str) -> None:
-    """Handle `auto [text]` / `autotrain [text]`."""
-    text = text.strip()
+    """Handle `auto [text] [mm:ss]` / `autotrain [text] [mm:ss]`."""
+    text, custom = _split_duration(text.strip())
     user_id = message.author.id
 
     # Cancel any existing task
@@ -181,7 +206,7 @@ async def handle_auto(message: discord.Message, text: str) -> None:
             except Exception:
                 pass
 
-    ends_at   = datetime.now(timezone.utc) + TIMER_DURATION
+    ends_at   = datetime.now(timezone.utc) + (custom or TIMER_DURATION)
     end_ts    = int(ends_at.timestamp())
     timer_msg = await message.channel.send(_timer_text(text, end_ts))
 
@@ -190,7 +215,10 @@ async def handle_auto(message: discord.Message, text: str) -> None:
         await conn.commit()
 
     _schedule(user_id, text, ends_at, timer_msg.id)
-    logger.info(f"[AutoTrain] Timer started for user {user_id} (text={text!r})")
+    logger.info(
+        f"[AutoTrain] Timer started for user {user_id} "
+        f"(text={text!r}, duration={custom or TIMER_DURATION})"
+    )
 
 
 async def handle_renew(message: discord.Message) -> None:
