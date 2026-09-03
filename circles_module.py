@@ -65,8 +65,10 @@ UPDATE_HOUR_UTC = 14
 UPDATE_MINUTE_UTC = 55
 
 # `run_daily_update` retry cadence if uma.moe / Discord is briefly unavailable.
+# Retries stay inside the pre-15:00-UTC window (a later fetch would read the
+# already-rolled game-day), so keep the gap short.
 DAILY_RETRY_ATTEMPTS = 3
-DAILY_RETRY_DELAY_S  = 900   # 15 min between loop-level retries
+DAILY_RETRY_DELAY_S  = 60
 
 # Manual hitlist lines queued by the "Dia add X to the hitlist" guild command.
 # These are prepended to the "List Changes" section of the next daily report and
@@ -1269,17 +1271,30 @@ async def _fetch_circle_retry(attempts: int = DAILY_RETRY_ATTEMPTS,
     return None
 
 
-async def run_daily_update(*, force: bool = False) -> bool:
+def slot_game_day(now: datetime | None = None) -> str:
+    """The game-day the most recent 14:55 UTC slot is responsible for — the one
+    ending at that slot's 15:00 UTC reset."""
+    now = now or datetime.now(timezone.utc)
+    slot = now.replace(hour=UPDATE_HOUR_UTC, minute=UPDATE_MINUTE_UTC,
+                       second=0, microsecond=0)
+    if now < slot:
+        slot -= timedelta(days=1)
+    return (slot - timedelta(hours=GAME_RESET_UTC_HOUR)).date().isoformat()
+
+
+async def run_daily_update(*, force: bool = False, game_day: str | None = None) -> bool:
     """The once-a-day routine: one uma.moe fetch, then refresh + snapshot the
     circle, send the daily fan report, and post the monthly leaderboard when a
     month wraps.
 
-    Keyed to the game-day (15:00 UTC reset). `force` overrides the
-    once-per-game-day guard (the `circle run` command). Returns True on success
-    or a legit skip; False if it should be retried.
+    `game_day` (YYYY-MM-DD) pins which game-day the report is *for* — the loop
+    captures it when the slot fires so a retry that slips past 15:00 UTC still
+    reports (and marks) the right day instead of skipping one. Defaults to the
+    current game-day. `force` overrides the once-per-game-day guard.
+    Returns True on success or a legit skip; False if it should be retried.
     """
     async with _update_lock:
-        today = game_now().date().isoformat()      # game-day, not UTC date
+        today = game_day or game_now().date().isoformat()
         async with aiosqlite.connect(LOCAL_DB) as conn:
             old_snapshots = await _load_snapshots(conn)
             last_report_date = await _get(conn, "last_report_date")
@@ -1326,19 +1341,27 @@ async def _circle_update_loop() -> None:
         )
         await asyncio.sleep(wait_secs)
 
+        target = game_now().date().isoformat()   # pin the game-day before any retry
+        ok = False
         for attempt in range(1 + DAILY_RETRY_ATTEMPTS):
             try:
-                if await run_daily_update():
+                if await run_daily_update(game_day=target):
+                    ok = True
                     break
             except Exception as exc:
                 logger.error(f"[Circles] Daily update error (attempt {attempt + 1}): {exc}")
             # Only keep retrying while we're still before the 15:00 UTC reset —
-            # a retry after it would snapshot the *next* game-day/month.
+            # a later fetch would read the already-rolled game-day.
             if (attempt < DAILY_RETRY_ATTEMPTS
                     and datetime.now(timezone.utc).hour < GAME_RESET_UTC_HOUR):
                 await asyncio.sleep(DAILY_RETRY_DELAY_S)
             else:
                 break
+        if not ok:
+            logger.error(
+                f"[Circles] Daily report for game-day {target} was NOT sent — "
+                f"retries exhausted. Recover with `circle run` or a restart's catch-up."
+            )
 
 
 async def _startup_catchup() -> None:
@@ -1346,12 +1369,7 @@ async def _startup_catchup() -> None:
     missed while the bot was down. Skips a fresh/cleared `last_report_date`
     (no prior state) so the scheduled loop takes the first, well-timed run."""
     await asyncio.sleep(90)   # let the bot settle / guild cache warm up
-    now  = datetime.now(timezone.utc)
-    slot = now.replace(hour=UPDATE_HOUR_UTC, minute=UPDATE_MINUTE_UTC,
-                       second=0, microsecond=0)
-    if now < slot:
-        slot -= timedelta(days=1)             # most recent slot that has passed
-    expected = (slot - timedelta(hours=GAME_RESET_UTC_HOUR)).date().isoformat()
+    expected = slot_game_day()
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         last_report_date = await _get(conn, "last_report_date")
@@ -1362,7 +1380,7 @@ async def _startup_catchup() -> None:
     logger.info(f"[Circles] Startup catch-up: last_report_date={last_report_date} "
                 f"< expected {expected} — running the daily update now")
     try:
-        await run_daily_update()
+        await run_daily_update(game_day=expected)
     except Exception as exc:
         logger.error(f"[Circles] Startup catch-up failed: {exc}")
 
