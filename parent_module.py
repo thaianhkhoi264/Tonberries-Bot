@@ -81,9 +81,19 @@ _BAD_LABELS      = ("Horrible", "Bad")
 _MIN_VEL_MOD     = 0.15
 _MIN_LSV_MOD     = 0.20
 _LSV_MAX_ORDER   = 6      # last_spurt_velocity position cutoff (order_rate<=75-equivalent)
-_ASSUMED_SPEED   = 20.0   # m/s assumed horse speed in midrace
 _SC_WIN_END_PROX = 150.0  # window end must be within this many metres of p2 (or past it)
 _SC_WIN_START_PROX = 200.0  # window start must be within this many metres of p2
+
+
+def _base_speed(course_distance: float) -> float:
+    """
+    BaseSpeed = 20.0 - (CourseDistance - 2000m)/1000 [m/s]
+    Per "Uma Musume Race Mechanics" (KuromiAK) — exact only at 2000m, adjusts
+    ~1 m/s per 1000m of course distance either way. Used as the midrace speed
+    estimate for speed-carryover reach calculations, in place of a flat
+    assumed 20.0 m/s.
+    """
+    return 20.0 - (course_distance - 2000.0) / 1000.0
 
 _OVERTAKE_FIELDS = frozenset({
     "is_overtake",
@@ -418,6 +428,7 @@ def _fires_as_speed_carryover(
     duration_frames: int,
     is_random: bool,
     course_distance: float,
+    vel_mod: float,
 ) -> tuple[bool, bool]:
     """
     Returns (qualifies, inconsistent).
@@ -443,12 +454,22 @@ def _fires_as_speed_carryover(
     Musume Race Mechanics": Duration = BaseDuration * CourseDistance[m] /
     1000. A skill's effective duration is longer on longer courses; using
     the raw baseDuration understates how long the boost actually lasts.
+
+    The speed used to project how far the boost carries is _base_speed(course
+    distance) + vel_mod, not a flat 20.0 m/s — TargetSpeed's own formula
+    sums BaseTargetSpeed with SkillModifier directly (m/s, additive), so a
+    skill's own speed effect genuinely raises how fast the horse covers
+    ground while it's active. Still an approximation (ignores
+    PositionKeepCoef, ForceInModifier, SlopeModifier, MoveLaneModifier, and
+    that target-speed changes aren't instant) — good enough for a condition-
+    window classifier without simulating full acceleration.
     """
     d = duration_frames / 10000.0 * (course_distance / 1000.0)
     if d <= 0:
         return False, False
 
-    carry_start  = p2 - _ASSUMED_SPEED * d
+    speed = _base_speed(course_distance) + vel_mod
+    carry_start  = p2 - speed * d
     any_qualifies    = False
     all_inconsistent = True
 
@@ -468,7 +489,7 @@ def _fires_as_speed_carryover(
             if r0 >= carry_start and r1 < p2:
                 all_inconsistent = False
         else:
-            reach = r0 + _ASSUMED_SPEED * d
+            reach = r0 + speed * d
             if reach >= p2:
                 any_qualifies = True
                 all_inconsistent = False
@@ -633,7 +654,7 @@ def build_parent_skills(
             bdur = int(best.get("baseDuration", 0))
             is_random_trigger = _has_random_trigger(cond, precond)
             sc_qualifies, sc_inconsistent = _fires_as_speed_carryover(
-                regions, p2, bdur, is_random_trigger, d,
+                regions, p2, bdur, is_random_trigger, d, vel_mod,
             )
 
             if reliability != "very unreliable" and sc_qualifies:
