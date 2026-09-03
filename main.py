@@ -247,8 +247,8 @@ async def on_message(message: discord.Message):
         await _cmd_shutdown(message)
     elif cmd_lower == "circles":
         await _cmd_circles(message)
-    elif cmd_lower == "circle run":
-        await _cmd_circle_run(message)
+    elif cmd_lower == "circle run" or cmd_lower.startswith("circle run "):
+        await _cmd_circle_run(message, cmd[len("circle run"):].strip())
     elif cmd_lower == "report":
         await _cmd_report(message)
     elif cmd_lower in ("shaming on", "shaming off"):
@@ -291,7 +291,8 @@ async def _cmd_help(message: discord.Message):
         "`refresh` — Force-refresh the ongoing/upcoming event channels\n"
         "`pending` — List all notifications scheduled in the next 3 days\n"
         "`circles` — Force-refresh the club circle stats\n"
-        "`circle run` — Run the full daily routine now (snapshot + report + monthly leaderboard)\n"
+        "`circle run [YYYY-MM-DD]` — Fire the full daily routine now if a scheduled report was missed "
+        "(snapshot + report + monthly leaderboard); defaults to the last game-day\n"
         "`report` — Force-send the daily fan report to you\n"
         "`shaming on/off` — Toggle posting the daily report to uma-chat-v2\n"
         "`fancount` — Show current monthly fan requirement\n"
@@ -417,15 +418,26 @@ async def _cmd_circles(message: discord.Message):
         await message.channel.send(f"Circle refresh failed: {exc}")
 
 
-async def _cmd_circle_run(message: discord.Message):
-    """Run the full daily routine now (snapshot + daily report + monthly
-    leaderboard if a month just wrapped), ignoring the once-per-day guard."""
-    if message.author.id != MAIN_OWNER_ID:
+async def _cmd_circle_run(message: discord.Message, arg: str = ""):
+    """`circle run [YYYY-MM-DD]` — fire the full daily routine now (snapshot +
+    daily report + monthly leaderboard if a month wrapped), ignoring the
+    once-per-day guard. Use it when a scheduled report didn't go out.
+
+    With no date it targets the most recent game-day that a 14:55 UTC slot was
+    responsible for (i.e. the one that should have just been reported).
+    """
+    if message.author.id not in OWNER_USER_IDS:
         await message.channel.send("No.")
         return
-    await message.channel.send("Running the daily circle update now…")
+
+    game_day = arg or circles_module.slot_game_day()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", game_day):
+        await message.channel.send("Date must be `YYYY-MM-DD`.")
+        return
+
+    await message.channel.send(f"Firing the daily circle update for game-day **{game_day}**…")
     try:
-        ok = await circles_module.run_daily_update(force=True)
+        ok = await circles_module.run_daily_update(force=True, game_day=game_day)
         await message.channel.send(
             "Done." if ok else "uma.moe was unreachable — nothing sent. Try again shortly."
         )
