@@ -44,6 +44,20 @@ CM_HORSES  = 9   # Champion's Meeting
 LOH_HORSES = 12  # League of Heroes
 
 
+def _order_rate_to_order(rate: float, n_horses: int) -> int:
+    """
+    Convert an order_rate percentage threshold to an absolute order position.
+
+    The game rounds to the nearest integer, not floor/ceil — per "Uma Musume
+    Race Mechanics" (KuromiAK): "Order rate condition is converted to order
+    condition, rounding to the nearest. For example, consider order_rate>50
+    in a 9-uma race. 9 * 50% = 4.5 ≈ 5. The condition is then converted to
+    order>5." Implemented as round-half-up (matches 4.5 -> 5, not banker's
+    rounding's 4.5 -> 4).
+    """
+    return math.floor(rate / 100.0 * n_horses + 0.5)
+
+
 # ---------------------------------------------------------------------------
 # Phase helpers — exact formulas from uma-skill-tools CourseData.ts
 # ---------------------------------------------------------------------------
@@ -244,9 +258,12 @@ def _eval_and_group(group: str, course: dict) -> list:
             con = [(pct * d, float(d))]
 
         elif field == "remain_distance":
+            # remain_distance = CourseDistance - floor(position), so
+            # remain_distance>=X actually triggers up to position < d-X+1
+            # (the floor makes it ~1m more lenient than a naive read).
             m_pos = d - val
             if op in ("<=", "<"):   con = [(max(0.0, m_pos), float(d))]
-            elif op in (">=", ">"): con = [(0.0, max(0.0, m_pos))]
+            elif op in (">=", ">"): con = [(0.0, max(0.0, m_pos + 1))]
             elif op == "==":        con = [(max(0.0, m_pos), min(m_pos + 1, float(d)))]
 
         elif field == "furlong":
@@ -635,7 +652,7 @@ def _extract_verdict_state(condition: str) -> list[str]:
         if (has_rate and has_ord
                 and rate_le is not None and rate_ge is None
                 and ord_ge  is not None and ord_le  is None and ord_eq is None):
-            hi = math.floor(rate_le / 100.0 * CM_HORSES)
+            hi = _order_rate_to_order(rate_le, CM_HORSES)
             lo = int(ord_ge)
             if lo == hi:
                 notes.append(f"in {_ordinal(lo)}")
@@ -646,7 +663,7 @@ def _extract_verdict_state(condition: str) -> list[str]:
         elif (has_rate and has_ord
                 and rate_ge is not None and rate_le is None
                 and ord_le  is not None and ord_ge  is None and ord_eq is None):
-            lo = math.ceil(rate_ge / 100.0 * CM_HORSES)
+            lo = _order_rate_to_order(rate_ge, CM_HORSES)
             hi = int(ord_le)
             if lo == hi:
                 notes.append(f"in {_ordinal(lo)}")
@@ -657,16 +674,16 @@ def _extract_verdict_state(condition: str) -> list[str]:
             # Handle each field independently
             if has_rate:
                 if rate_ge is not None and rate_le is not None:
-                    lo = math.ceil(rate_ge / 100.0 * CM_HORSES)
-                    hi = math.floor(rate_le / 100.0 * CM_HORSES)
+                    lo = _order_rate_to_order(rate_ge, CM_HORSES)
+                    hi = _order_rate_to_order(rate_le, CM_HORSES)
                     if lo == hi:
                         notes.append(f"{_ordinal(lo)} (CM)")
                     else:
                         notes.append(f"{_ordinal(lo)}\u2013{_ordinal(hi)} (CM)")
                 elif rate_le is not None:
-                    notes.append(f"top {max(1, math.floor(rate_le / 100.0 * CM_HORSES))} (CM)")
+                    notes.append(f"top {max(1, _order_rate_to_order(rate_le, CM_HORSES))} (CM)")
                 elif rate_ge is not None:
-                    notes.append(f"{_ordinal(math.ceil(rate_ge / 100.0 * CM_HORSES))}+ (CM)")
+                    notes.append(f"{_ordinal(_order_rate_to_order(rate_ge, CM_HORSES))}+ (CM)")
 
             if has_ord:
                 if ord_eq is not None:
