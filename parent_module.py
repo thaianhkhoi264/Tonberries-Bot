@@ -40,6 +40,7 @@ from skill_chart import (
     evaluate_trigger,
     format_effects,
     phase_start,
+    _order_rate_to_order,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,8 +293,10 @@ def _parse_pos_range(chunk: str) -> tuple[int | None, int | None]:
         elif op == "<=":
             le_rate = val
     if ge_rate is not None or le_rate is not None:
-        lo = math.ceil(ge_rate / 100.0 * NHORSE) if ge_rate is not None else 1
-        hi = math.floor(le_rate / 100.0 * NHORSE) if le_rate is not None else NHORSE
+        # order_rate -> order rounds to nearest, not floor/ceil — see
+        # skill_chart._order_rate_to_order for the source.
+        lo = _order_rate_to_order(ge_rate, NHORSE) if ge_rate is not None else 1
+        hi = _order_rate_to_order(le_rate, NHORSE) if le_rate is not None else NHORSE
         # Tighten with any absolute order constraints (e.g. order>=4 raises lo)
         for om in re.finditer(r"(?<!\w)order(>=|<=)(\d+)", chunk):
             op2, val2 = om.group(1), int(om.group(2))
@@ -414,6 +417,7 @@ def _fires_as_speed_carryover(
     p2: float,
     duration_frames: int,
     is_random: bool,
+    course_distance: float,
 ) -> tuple[bool, bool]:
     """
     Returns (qualifies, inconsistent).
@@ -434,8 +438,13 @@ def _fires_as_speed_carryover(
         ambiguity. Compute directly whether the boost survives from r0 to
         p2; if it doesn't, the region simply doesn't qualify (not a
         "maybe" — it's just not a carryover).
+
+    duration_frames is scaled by course distance before use — per "Uma
+    Musume Race Mechanics": Duration = BaseDuration * CourseDistance[m] /
+    1000. A skill's effective duration is longer on longer courses; using
+    the raw baseDuration understates how long the boost actually lasts.
     """
-    d = duration_frames / 10000.0
+    d = duration_frames / 10000.0 * (course_distance / 1000.0)
     if d <= 0:
         return False, False
 
@@ -624,7 +633,7 @@ def build_parent_skills(
             bdur = int(best.get("baseDuration", 0))
             is_random_trigger = _has_random_trigger(cond, precond)
             sc_qualifies, sc_inconsistent = _fires_as_speed_carryover(
-                regions, p2, bdur, is_random_trigger,
+                regions, p2, bdur, is_random_trigger, d,
             )
 
             if reliability != "very unreliable" and sc_qualifies:
