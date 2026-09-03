@@ -1316,7 +1316,7 @@ async def run_daily_update(*, force: bool = False, game_day: str | None = None) 
             post_channel_id=GENERAL_CHANNEL_ID if shaming else None,
         )
 
-        await _maybe_post_monthly_leaderboard(force=force)
+        await _maybe_post_monthly_leaderboard()
 
         async with aiosqlite.connect(LOCAL_DB) as conn:
             await _set(conn, "last_report_date", today)
@@ -1385,14 +1385,14 @@ async def _startup_catchup() -> None:
         logger.error(f"[Circles] Startup catch-up failed: {exc}")
 
 
-async def _maybe_post_monthly_leaderboard(*, force: bool = False) -> None:
-    """Post a month's Fan Leaderboard once, right after that month finishes.
+async def _maybe_post_monthly_leaderboard() -> None:
+    """Post a month's Fan Leaderboard **once**, right after that month finishes.
 
     On the final game-day of a month the snapshot just taken this run is that
     month's (near-)final, so post it now; otherwise catch up on the most recent
-    fully-finalised month. `last_leaderboard_month` makes the scheduled call
-    idempotent (and is only set on a confirmed post); `force` (the `circle run`
-    command) re-posts regardless.
+    fully-finalised month. `last_leaderboard_month` is the idempotency guard, so
+    this is a no-op once that month's board has posted — including when
+    `circle run` re-runs the daily routine for an unrelated day.
     """
     from leaderboard import data as lb_data
 
@@ -1407,7 +1407,7 @@ async def _maybe_post_monthly_leaderboard(*, force: bool = False) -> None:
 
     tag = f"{target[0]}-{target[1]:02d}"
     async with aiosqlite.connect(LOCAL_DB) as conn:
-        if not force and await _get(conn, "last_leaderboard_month") == tag:
+        if await _get(conn, "last_leaderboard_month") == tag:
             return
 
     if await post_monthly_leaderboard(target[0], target[1]):
