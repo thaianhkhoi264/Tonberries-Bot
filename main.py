@@ -17,6 +17,7 @@ import lookup_module
 import skill_sync
 import cm_module
 import parent_module
+import stamina_module
 import role_module
 import players_module
 
@@ -96,6 +97,38 @@ async def _slash_parent_cm_autocomplete(
     return await parent_module.autocomplete_cm(interaction, current)
 
 
+@bot.tree.command(name="stamina", description="Recommend a minimum Stamina stat per running style for a CM or course")
+@app_commands.describe(
+    course="CM or racecourse to calculate for (defaults to current/next CM)",
+    distance="Course variant / distance (only for venue selections)",
+)
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def _slash_stamina(
+    interaction: discord.Interaction,
+    course: str | None = None,
+    distance: str | None = None,
+):
+    await stamina_module.handle_stamina_interaction(interaction, course, distance)
+
+
+@_slash_stamina.autocomplete("course")
+async def _slash_stamina_course_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return await cm_module.autocomplete_course(interaction, current)
+
+
+@_slash_stamina.autocomplete("distance")
+async def _slash_stamina_distance_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    course_value = interaction.namespace.course or ""
+    return await cm_module.autocomplete_length(interaction, current, course_value)
+
+
 @bot.tree.command(name="whenis", description="Look up when a support card or character will appear on a banner")
 @app_commands.describe(name="Character or support card name")
 @app_commands.allowed_installs(guilds=True, users=True)
@@ -169,6 +202,7 @@ async def on_ready():
     skills_module.load_uma_data()
     parent_module.load_parent_data()
     await parent_module.start_background_tasks()
+    stamina_module.load_stamina_data()
     await role_module.init_db()
     await players_module.init_db()
     role_module.load_character_cache(force=True)
