@@ -175,48 +175,51 @@ def _parse_cm_event(ev: dict) -> dict | None:
     description format:
         "Venue - Surface<br>Distance - DistType - Direction<br>Ground - Season - Weather"
     id format:
-        "champions-meeting-N"  (0-indexed → CM number N+1)
+        "champions-meeting-N"  (0-indexed -> CM number N+1)
 
-    uma.moe's timeline also carries far-future *predicted* CM events with
-    is_confirmed=False — these have a date-stamped id
-    ("news-event-champions-meeting-2025-12-21") that the id regex below still
-    partially (wrongly) matches, and a free-form prose description with no
-    "<br>" structure at all, which get read as venue/surface/etc. Since these
-    carry no real course data anyway (nothing to resolve to an actual
-    course_data.json entry), they're rejected outright rather than parsed.
+    Accepts BOTH confirmed events AND well-formed "extrapolated" predictions
+    (is_confirmed=False but a real id + a real 3-line description, e.g. a
+    guessed-but-plausible "champions-meeting-19" for a not-yet-confirmed CM20)
+    -- these carry a real venue/distance/surface guess, just not locked in yet,
+    and are worth showing (labeled as predictions by the callers below).
+
+    uma.moe's timeline ALSO carries a separate, unrelated category of far-future
+    speculative entries with a date-stamped id
+    ("news-event-champions-meeting-2025-12-21") and a free-form prose
+    description with no "<br>" structure at all -- no real course data at all.
+    The id check below is an exact fullmatch specifically so these never slip
+    through (a plain re.search on the old pattern used to wrongly match a
+    date fragment inside these ids as if it were a CM number).
     """
-    if not ev.get("is_confirmed"):
-        return None
-
-    m = re.search(r"champions-meeting-(\d+)", ev.get("id", ""))
+    m = re.fullmatch(r"champions-meeting-(\d+)", ev.get("id", ""))
     if not m:
         return None
     number = int(m.group(1)) + 1
 
     lines = [l.strip() for l in re.split(r"<br\s*/?>", ev.get("description", ""), flags=re.I)]
+    if len(lines) != 3:
+        return None  # not the expected structure -- reject rather than guess
 
-    venue = surface = dist_type = direction = ground = season = weather = ""
+    parts = [p.strip() for p in lines[0].split(" - ")]
+    venue   = parts[0] if len(parts) > 0 else ""
+    surface = parts[1] if len(parts) > 1 else ""
+
+    parts = [p.strip() for p in lines[1].split(" - ")]
     distance = 0
+    try:
+        distance = int(parts[0].rstrip("mM"))
+    except (ValueError, IndexError):
+        pass
+    dist_type = parts[1] if len(parts) > 1 else ""
+    direction = parts[2] if len(parts) > 2 else ""
 
-    if lines:
-        parts = [p.strip() for p in lines[0].split(" - ")]
-        venue   = parts[0] if len(parts) > 0 else ""
-        surface = parts[1] if len(parts) > 1 else ""
+    parts = [p.strip() for p in lines[2].split(" - ")]
+    ground  = parts[0] if len(parts) > 0 else ""
+    season  = parts[1] if len(parts) > 1 else ""
+    weather = parts[2] if len(parts) > 2 else ""
 
-    if len(lines) >= 2:
-        parts = [p.strip() for p in lines[1].split(" - ")]
-        try:
-            distance = int(parts[0].rstrip("mM"))
-        except (ValueError, IndexError):
-            pass
-        dist_type = parts[1] if len(parts) > 1 else ""
-        direction = parts[2] if len(parts) > 2 else ""
-
-    if len(lines) >= 3:
-        parts = [p.strip() for p in lines[2].split(" - ")]
-        ground  = parts[0] if len(parts) > 0 else ""
-        season  = parts[1] if len(parts) > 1 else ""
-        weather = parts[2] if len(parts) > 2 else ""
+    if not venue or not distance:
+        return None  # still not usable even with 3 lines -- do not guess a course
 
     start_ts = _parse_ts(ev.get("global_release_date") or ev.get("jp_release_date") or "")
     end_ts   = _parse_ts(ev.get("estimated_end_date") or "")
@@ -307,24 +310,31 @@ def _check_char_banner_schema(ev: dict) -> list[str]:
 def _validate_timeline_schema(data: dict) -> list[str]:
     """
     Sanity-check the raw uma.moe timeline payload against every structural
-    assumption our parsers rely on. Only checks CONFIRMED champions_meeting
-    events (unconfirmed ones are deliberately not parsed at all -- see
-    _parse_cm_event) plus a sample of character_banner events. Returns a
-    list of specific, human-readable mismatches; empty means nothing has
-    drifted from what we expect.
+    assumption our parsers rely on. Checks every champions_meeting event whose
+    id matches the "champions-meeting-N" pattern -- confirmed AND well-formed
+    unconfirmed predictions alike, since _parse_cm_event now accepts both --
+    plus a sample of character_banner events. The unrelated "news-event-..."
+    speculative entries never match that id pattern and are correctly ignored
+    by this check the same way _parse_cm_event ignores them. Returns a list of
+    specific, human-readable mismatches; empty means nothing has drifted from
+    what we expect.
     """
     issues: list[str] = []
     events = data.get("events")
     if not isinstance(events, list):
         return [f"top-level 'events' is {type(events).__name__}, expected a list"]
 
-    confirmed_cms = [e for e in events if e.get("type") == "champions_meeting" and e.get("is_confirmed")]
-    if not confirmed_cms:
+    cm_candidates = [
+        e for e in events
+        if e.get("type") == "champions_meeting"
+        and re.fullmatch(r"champions-meeting-\d+", str(e.get("id", "")))
+    ]
+    if not cm_candidates:
         issues.append(
-            "no confirmed champions_meeting events found at all -- either none "
-            "exist right now or 'is_confirmed' semantics changed"
+            "no champions_meeting events with a 'champions-meeting-N' id found at "
+            "all -- the id format itself may have changed"
         )
-    for ev in confirmed_cms:
+    for ev in cm_candidates:
         issues.extend(_check_cm_event_schema(ev))
 
     banners = [e for e in events if e.get("type") == "character_banner"]
@@ -497,12 +507,15 @@ def _cm_course_id(cm: dict) -> int | None:
 def _cm_display(cm: dict) -> str:
     """
     Short label for autocomplete: 'CM#17 — Kyoto 2200m Turf'
+    Unconfirmed (predicted) CMs get a " (Predicted)" suffix so they read
+    differently from locked-in courses -- see _parse_cm_event.
     Truncated to Discord's 100-char Choice-name limit -- a single overlong
     label previously broke the *entire* autocomplete response, not just
-    that one entry (see _parse_cm_event's is_confirmed guard for the root
-    cause this defends against).
+    that one entry.
     """
     label = f"CM#{cm['number']} — {cm['venue']} {cm['distance']}m {cm['surface']}"
+    if not cm.get("is_confirmed"):
+        label += " (Predicted)"
     return label if len(label) <= 100 else label[:97] + "..."
 
 
@@ -510,6 +523,7 @@ def _cm_course_display(cm: dict) -> str:
     """
     Full course display for embed footer:
     'CM#17 — Kyoto 2200m Turf, Right, Good, Fall, Sunny'
+    Unconfirmed (predicted) CMs get a trailing note -- see _parse_cm_event.
     """
     parts = [
         f"CM#{cm['number']} \u2014 {cm['venue']} {cm['distance']}m {cm['surface']}",
@@ -518,7 +532,10 @@ def _cm_course_display(cm: dict) -> str:
         display(cm["season"]),
         cm["weather"],
     ]
-    return ", ".join(p for p in parts if p)
+    label = ", ".join(p for p in parts if p)
+    if not cm.get("is_confirmed"):
+        label += " (Predicted -- not yet confirmed)"
+    return label
 
 
 # ---------------------------------------------------------------------------

@@ -794,6 +794,8 @@ async def autocomplete_cm(
         # Truncated to Discord's 100-char Choice-name limit -- an overlong
         # label previously broke the entire autocomplete response.
         label = f"CM#{cm['number']} — {cm['venue']} {cm['distance']}m {cm['surface']}"
+        if not cm.get("is_confirmed"):
+            label += " (Predicted)"
         return label if len(label) <= 100 else label[:97] + "..."
 
     for cm in ordered:
