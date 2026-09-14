@@ -791,7 +791,10 @@ async def autocomplete_cm(
     seen: set[int] = set()
 
     def _label(cm: dict) -> str:
-        return f"CM#{cm['number']} — {cm['venue']} {cm['distance']}m {cm['surface']}"
+        # Truncated to Discord's 100-char Choice-name limit -- an overlong
+        # label previously broke the entire autocomplete response.
+        label = f"CM#{cm['number']} — {cm['venue']} {cm['distance']}m {cm['surface']}"
+        return label if len(label) <= 100 else label[:97] + "..."
 
     for cm in ordered:
         num = cm["number"]

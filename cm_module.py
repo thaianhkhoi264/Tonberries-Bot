@@ -52,6 +52,7 @@ from discord import app_commands
 from global_config import (
     COURSE_DATA_JSON,
     COURSE_LABELS_JSON,
+    MAIN_OWNER_ID,
     SKILL_DATA_JSON,
     SKILL_NAMES_JSON,
     TRACK_NAMES_JSON,
@@ -175,7 +176,18 @@ def _parse_cm_event(ev: dict) -> dict | None:
         "Venue - Surface<br>Distance - DistType - Direction<br>Ground - Season - Weather"
     id format:
         "champions-meeting-N"  (0-indexed → CM number N+1)
+
+    uma.moe's timeline also carries far-future *predicted* CM events with
+    is_confirmed=False — these have a date-stamped id
+    ("news-event-champions-meeting-2025-12-21") that the id regex below still
+    partially (wrongly) matches, and a free-form prose description with no
+    "<br>" structure at all, which get read as venue/surface/etc. Since these
+    carry no real course data anyway (nothing to resolve to an actual
+    course_data.json entry), they're rejected outright rather than parsed.
     """
+    if not ev.get("is_confirmed"):
+        return None
+
     m = re.search(r"champions-meeting-(\d+)", ev.get("id", ""))
     if not m:
         return None
@@ -225,6 +237,136 @@ def _parse_cm_event(ev: dict) -> dict | None:
     }
 
 
+# ---------------------------------------------------------------------------
+# Schema drift detection
+# ---------------------------------------------------------------------------
+# uma.moe's timeline format has changed before without warning (see the
+# 2026-09 incident: unconfirmed "predicted" CM events started appearing with
+# a date-stamped id and free-form prose description, which _parse_cm_event's
+# regex/split logic partially-but-wrongly matched, producing garbage entries
+# that broke /parent, /skill and /stamina's course autocomplete entirely).
+# This checks every structural assumption _parse_cm_event and the
+# character_banner branch rely on, every fetch, and DMs the owner with the
+# exact mismatch the moment the API shape moves again.
+
+_SCHEMA_ALERT_COOLDOWN = 12 * 3600  # seconds — avoid re-DMing every cache refresh
+_last_schema_alert_ts = 0.0
+
+
+def _check_cm_event_schema(ev: dict) -> list[str]:
+    """Check ONE confirmed champions_meeting event; empty list = looks fine."""
+    issues: list[str] = []
+    eid = ev.get("id", "<no id>")
+
+    if not re.fullmatch(r"champions-meeting-\d+", str(ev.get("id", ""))):
+        issues.append(f"{eid}: id does not match 'champions-meeting-N'")
+        return issues  # the checks below assume this already holds
+
+    desc = ev.get("description", "")
+    lines = [l.strip() for l in re.split(r"<br\s*/?>", desc, flags=re.I)]
+    if len(lines) != 3:
+        issues.append(
+            f"{eid}: description has {len(lines)} '<br>'-delimited line(s), "
+            f"expected 3 -- got {desc[:80]!r}"
+        )
+        return issues  # line-by-line checks below assume 3 lines exist
+
+    l0 = [p.strip() for p in lines[0].split(" - ")]
+    if len(l0) != 2:
+        issues.append(f"{eid}: line 1 {lines[0]!r} has {len(l0)} ' - '-part(s), expected 2 (Venue, Surface)")
+
+    l1 = [p.strip() for p in lines[1].split(" - ")]
+    if len(l1) != 3:
+        issues.append(f"{eid}: line 2 {lines[1]!r} has {len(l1)} ' - '-part(s), expected 3 (Distance, DistType, Direction)")
+    else:
+        try:
+            int(l1[0].rstrip("mM"))
+        except ValueError:
+            issues.append(f"{eid}: line 2's distance {l1[0]!r} does not parse as an integer")
+
+    l2 = [p.strip() for p in lines[2].split(" - ")]
+    if len(l2) != 3:
+        issues.append(f"{eid}: line 3 {lines[2]!r} has {len(l2)} ' - '-part(s), expected 3 (Ground, Season, Weather)")
+
+    if not (ev.get("global_release_date") or ev.get("jp_release_date")):
+        issues.append(f"{eid}: missing both global_release_date and jp_release_date")
+
+    return issues
+
+
+def _check_char_banner_schema(ev: dict) -> list[str]:
+    issues: list[str] = []
+    eid = ev.get("id", "<no id>")
+    if not ev.get("global_release_date"):
+        issues.append(f"character_banner {eid}: missing global_release_date")
+    if not isinstance(ev.get("pickup_card_ids"), list):
+        issues.append(f"character_banner {eid}: pickup_card_ids missing or not a list")
+    return issues
+
+
+def _validate_timeline_schema(data: dict) -> list[str]:
+    """
+    Sanity-check the raw uma.moe timeline payload against every structural
+    assumption our parsers rely on. Only checks CONFIRMED champions_meeting
+    events (unconfirmed ones are deliberately not parsed at all -- see
+    _parse_cm_event) plus a sample of character_banner events. Returns a
+    list of specific, human-readable mismatches; empty means nothing has
+    drifted from what we expect.
+    """
+    issues: list[str] = []
+    events = data.get("events")
+    if not isinstance(events, list):
+        return [f"top-level 'events' is {type(events).__name__}, expected a list"]
+
+    confirmed_cms = [e for e in events if e.get("type") == "champions_meeting" and e.get("is_confirmed")]
+    if not confirmed_cms:
+        issues.append(
+            "no confirmed champions_meeting events found at all -- either none "
+            "exist right now or 'is_confirmed' semantics changed"
+        )
+    for ev in confirmed_cms:
+        issues.extend(_check_cm_event_schema(ev))
+
+    banners = [e for e in events if e.get("type") == "character_banner"]
+    for ev in banners[:5]:  # sample -- banners are numerous, checking all is unnecessary
+        issues.extend(_check_char_banner_schema(ev))
+
+    return issues
+
+
+async def _alert_schema_drift(issues: list[str]) -> None:
+    """Log every detected issue and DM the owner, rate-limited to once per cooldown."""
+    global _last_schema_alert_ts
+    now = time.time()
+
+    logger.error(f"[CMModule] uma.moe timeline schema drift detected ({len(issues)} issue(s)):")
+    for issue in issues:
+        logger.error(f"[CMModule]   - {issue}")
+
+    if now - _last_schema_alert_ts < _SCHEMA_ALERT_COOLDOWN:
+        return
+    _last_schema_alert_ts = now
+
+    try:
+        from bot import bot as _bot  # local import -- see note on bot.py import side effects
+        nl = chr(10)
+        preview = nl.join(f"- {i}" for i in issues[:8])
+        more = f"{nl}...and {len(issues) - 8} more" if len(issues) > 8 else ""
+        message_lines = [
+            "Warning: uma.moe timeline schema may have changed -- /parent, /skill and",
+            "/stamina course autocomplete could break if this isn't addressed.",
+            "",
+            "```",
+            preview + more,
+            "```",
+            "Check `cm_module._parse_cm_event` against the current API response.",
+        ]
+        user = await _bot.fetch_user(MAIN_OWNER_ID)
+        await user.send(nl.join(message_lines))
+    except Exception as exc:
+        logger.error(f"[CMModule] Failed to DM owner about schema drift: {exc}")
+
+
 async def fetch_cm_events() -> list[dict]:
     """
     Fetch Champions Meeting events from uma.moe timeline.
@@ -251,6 +393,10 @@ async def fetch_cm_events() -> list[dict]:
             data = json.loads(gzip.decompress(raw).decode("utf-8"))
         except Exception:
             data = json.loads(raw.decode("utf-8"))
+
+        schema_issues = _validate_timeline_schema(data)
+        if schema_issues:
+            await _alert_schema_drift(schema_issues)
 
         parsed = []
         char_banners = []
@@ -349,8 +495,15 @@ def _cm_course_id(cm: dict) -> int | None:
 
 
 def _cm_display(cm: dict) -> str:
-    """Short label for autocomplete: 'CM#17 — Kyoto 2200m Turf'"""
-    return f"CM#{cm['number']} \u2014 {cm['venue']} {cm['distance']}m {cm['surface']}"
+    """
+    Short label for autocomplete: 'CM#17 — Kyoto 2200m Turf'
+    Truncated to Discord's 100-char Choice-name limit -- a single overlong
+    label previously broke the *entire* autocomplete response, not just
+    that one entry (see _parse_cm_event's is_confirmed guard for the root
+    cause this defends against).
+    """
+    label = f"CM#{cm['number']} — {cm['venue']} {cm['distance']}m {cm['surface']}"
+    return label if len(label) <= 100 else label[:97] + "..."
 
 
 def _cm_course_display(cm: dict) -> str:
