@@ -1,7 +1,24 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from local_config import (
+    OWNER_USER_IDS,
+    MAIN_OWNER_ID,
+    MAIN_SERVER_ID,
+    ONGOING_CHANNEL_ID,
+    UPCOMING_CHANNEL_ID,
+    NOTIFICATION_CHANNEL_ID,
+    GENERAL_CHANNEL_ID,
+    CIRCLE_ID,
+    CIRCLE_CHANNEL_ID,
+)
+
 # Tonberries-Bot Configuration
+#
+# Discord/uma.moe IDs (owner IDs, server ID, channel IDs, circle ID) live in
+# local_config.py, which is gitignored and never committed. Copy
+# local_config.example.py to local_config.py and fill in real values to run
+# the bot. Everything else (paths, non-sensitive settings) stays here.
 
 # The Umamusume global server's daily reset is 15:00 UTC. Fan counts (daily and
 # monthly) roll over then, not at the UTC calendar midnight — so every "what day
@@ -18,16 +35,6 @@ def game_now() -> datetime:
     """
     return datetime.now(timezone.utc) - timedelta(hours=GAME_RESET_UTC_HOUR)
 
-OWNER_USER_IDS          = (680653908259110914, 0)  # Discord user IDs allowed to DM-command the bot
-MAIN_OWNER_ID           = 680653908259110914   # Primary owner — receives restart DMs, exclusive hitlist access
-MAIN_SERVER_ID          = 0  # Discord guild (server) ID for the Tonberries server
-
-ONGOING_CHANNEL_ID      = 0  # Channel for currently active UMA events
-UPCOMING_CHANNEL_ID     = 0  # Channel for upcoming UMA events
-NOTIFICATION_CHANNEL_ID = 0  # Channel where notification messages are posted
-
-GENERAL_CHANNEL_ID = 0  # uma-chat-v2 channel
-
 # Absolute path to Gacha-Timer-Bot on the same Pi
 GACHA_BOT_DIR = "/home/piberry/Gacha-Timer-Bot"
 
@@ -42,8 +49,6 @@ SCRAPER_LAST_RUN_FILE = f"{GACHA_BOT_DIR}/data/scraper_last_run.txt"
 LOCAL_DB = "data/tonberries.db"
 
 # Circles — uma.moe API
-CIRCLE_ID         = "0"          # uma.moe circle ID for Tonberries
-CIRCLE_CHANNEL_ID = 0  # Channel where circle stats are posted
 UMA_MOE_API_KEY   = os.getenv("UMA_MOE_API_KEY", "")  # set in .env
 
 # Skills scraper (GameTora)

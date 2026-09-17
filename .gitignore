@@ -1,4 +1,5 @@
 .env
+local_config.py
 data/
 logs/
 __pycache__/
