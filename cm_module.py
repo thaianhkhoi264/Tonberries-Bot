@@ -88,6 +88,7 @@ def apply_display_fixes(text: str) -> str:
 _VENUE_ALIASES: dict[str, str] = {
     "Oi":  "Ooi",
     "Ohi": "Ooi",
+    "Chukyo": "Chuukyo",
 }
 
 # ---------------------------------------------------------------------------
