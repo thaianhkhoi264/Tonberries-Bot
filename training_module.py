@@ -82,12 +82,14 @@ async def init_db() -> None:
                 ends_at                TEXT,
                 dashboard_msg_id       INTEGER,
                 support_card_ids       TEXT,
-                friend_support_card_id INTEGER
+                friend_support_card_id INTEGER,
+                ready_notification_msg_id INTEGER
             )
         """)
         # Migrate pre-existing installs (CREATE TABLE IF NOT EXISTS above is a
         # no-op once the table already exists, so add the new columns here).
-        for column, coltype in (("support_card_ids", "TEXT"), ("friend_support_card_id", "INTEGER")):
+        for column, coltype in (("support_card_ids", "TEXT"), ("friend_support_card_id", "INTEGER"),
+                                 ("ready_notification_msg_id", "INTEGER")):
             try:
                 await conn.execute(f"ALTER TABLE active_training ADD COLUMN {column} {coltype}")
             except Exception:
@@ -115,7 +117,8 @@ async def init_db() -> None:
 async def _get_active(conn, user_id: int) -> dict | None:
     async with conn.execute(
         "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id, "
-        "support_card_ids, friend_support_card_id FROM active_training WHERE user_id=?",
+        "support_card_ids, friend_support_card_id, ready_notification_msg_id "
+        "FROM active_training WHERE user_id=?",
         (user_id,),
     ) as cur:
         row = await cur.fetchone()
@@ -126,21 +129,31 @@ async def _get_active(conn, user_id: int) -> dict | None:
         "started_at": row[3], "ends_at": row[4], "dashboard_msg_id": row[5],
         "support_card_ids": json.loads(row[6]) if row[6] else None,
         "friend_support_card_id": row[7],
+        "ready_notification_msg_id": row[8],
     }
 
 
 async def _save_active(conn, user_id: int, mode: str, card_id: int, scenario_id: int | None,
                         started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None,
                         support_card_ids: list | None = None, friend_support_card_id: int | None = None) -> None:
+    # ready_notification_msg_id always starts NULL — it's only ever set later,
+    # once the independent-mode timer actually fires (see _set_ready_notification).
     await conn.execute(
         """INSERT OR REPLACE INTO active_training
            (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,
-            support_card_ids, friend_support_card_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            support_card_ids, friend_support_card_id, ready_notification_msg_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
         (user_id, mode, card_id, scenario_id, started_at.isoformat(),
          ends_at.isoformat() if ends_at else None, dashboard_msg_id,
          json.dumps(support_card_ids) if support_card_ids is not None else None,
          friend_support_card_id),
+    )
+
+
+async def _set_ready_notification(conn, user_id: int, message_id: int) -> None:
+    await conn.execute(
+        "UPDATE active_training SET ready_notification_msg_id=? WHERE user_id=?",
+        (message_id, user_id),
     )
 
 
@@ -300,18 +313,22 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int, ends_at: date
 
 
 async def _clear_dashboard(user_id: int) -> None:
+    """Deletes the status message and, if the independent-mode ready-ping fired, that too."""
     async with aiosqlite.connect(LOCAL_DB) as conn:
         existing = await _get_active(conn, user_id)
-    if not existing or not existing["dashboard_msg_id"]:
+    if not existing:
         return
     channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
     if channel is None:
         return
-    try:
-        msg = await channel.fetch_message(existing["dashboard_msg_id"])
-        await msg.delete()
-    except Exception:
-        pass  # already gone — fine
+    for msg_id in (existing["dashboard_msg_id"], existing["ready_notification_msg_id"]):
+        if not msg_id:
+            continue
+        try:
+            msg = await channel.fetch_message(msg_id)
+            await msg.delete()
+        except Exception:
+            pass  # already gone — fine
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +353,21 @@ async def _run_notification_timer(user_id: int, mode: str, card_id: int, ends_at
     await _update_dashboard(user_id, mode, card_id, ends_at=ends_at, ready=True,
                              support_card_ids=row["support_card_ids"],
                              friend_support_card_id=row["friend_support_card_id"])
+
+    # Separate pinging message, distinct from the status embed above — deleted
+    # alongside it (see _clear_dashboard) once the run actually finishes.
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is not None:
+        try:
+            ping_msg = await channel.send(
+                f"<@{user_id}> Independent Training has ended — log in to collect the result!"
+            )
+            async with aiosqlite.connect(LOCAL_DB) as conn:
+                await _set_ready_notification(conn, user_id, ping_msg.id)
+                await conn.commit()
+        except Exception as exc:
+            logger.error(f"[Training] Failed to send ready-ping for user {user_id}: {exc}")
+
     logger.info(f"[Training] Ready-to-collect notification fired for user {user_id}")
 
 
@@ -572,6 +604,20 @@ async def handle_training_start(user_id: int, data: dict) -> None:
     # A fresh training_start makes any confirmation still awaiting a reply
     # for this user stale — supersede it.
     await _cancel_pending_confirmation(user_id)
+
+    # Likewise, a leftover ready-ping from a previous run that never got a
+    # training_end (so _clear_dashboard never ran) would otherwise be orphaned
+    # once _save_active below overwrites its row.
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        stale = await _get_active(conn, user_id)
+    if stale and stale["ready_notification_msg_id"]:
+        channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+        if channel is not None:
+            try:
+                msg = await channel.fetch_message(stale["ready_notification_msg_id"])
+                await msg.delete()
+            except Exception:
+                pass  # already gone — fine
 
     mode = data["mode"]
     card_id = data["cardId"]
