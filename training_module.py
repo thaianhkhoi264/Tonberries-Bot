@@ -34,6 +34,7 @@ training_start OR another ambiguous training_end for the same user cancels
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
@@ -184,6 +185,26 @@ async def _clear_pending_confirmation(conn, user_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Thumbnail — trained-character portrait, shared by the dashboard and result embeds.
+# Filename lookup (for the embed's attachment:// URL) and the actual discord.File
+# (for the upload itself) are kept separate: a discord.File wraps an open file
+# handle, so a fresh one is created right before each individual send/edit call
+# rather than reused across a fallback path (e.g. edit-fails-then-send-new).
+# ---------------------------------------------------------------------------
+
+def _thumbnail_filename(card_id: int) -> str | None:
+    path = decode.character_icon_path(card_id)
+    return os.path.basename(path) if path else None
+
+
+def _thumbnail_file(card_id: int) -> discord.File | None:
+    path = decode.character_icon_path(card_id)
+    if not path:
+        return None
+    return discord.File(path, filename=os.path.basename(path))
+
+
+# ---------------------------------------------------------------------------
 # Dashboard channel — one live status message per user
 # ---------------------------------------------------------------------------
 
@@ -201,7 +222,11 @@ def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: b
         status = "Manual Training ongoing — waiting for it to end"
         colour = discord.Colour.blurple()
 
-    return discord.Embed(title=title, description=status, colour=colour)
+    embed = discord.Embed(title=title, description=status, colour=colour)
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
+    return embed
 
 
 async def _update_dashboard(user_id: int, mode: str, card_id: int,
@@ -221,7 +246,8 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int,
     if msg_id:
         try:
             msg = await channel.fetch_message(msg_id)
-            await msg.edit(embed=embed)
+            file = _thumbnail_file(card_id)
+            await msg.edit(embed=embed, attachments=[file] if file else [])
             return msg_id
         except discord.NotFound:
             pass  # fall through and post a new one
@@ -229,7 +255,8 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int,
             logger.error(f"[Training] Failed to edit dashboard message for {user_id}: {exc}")
 
     try:
-        msg = await channel.send(embed=embed)
+        file = _thumbnail_file(card_id)
+        msg = await channel.send(embed=embed, file=file) if file else await channel.send(embed=embed)
         return msg.id
     except Exception as exc:
         logger.error(f"[Training] Failed to send dashboard message for {user_id}: {exc}")
@@ -331,6 +358,9 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
     rank_value = f"{rank} ({rank_score:,} pts)" if isinstance(rank_score, int) else str(rank)
 
     embed = discord.Embed(title=title, colour=discord.Colour.green())
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
     embed.add_field(name="Rank", value=rank_value)
     embed.add_field(name="Fans", value=f"{data.get('fans', 0):,}")
 
@@ -355,6 +385,9 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
     embed = discord.Embed(title=title, colour=discord.Colour.purple())
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
 
     factors = data.get("factors") or []
     if factors:
@@ -371,7 +404,7 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
 # Duplicate-result handling
 # ---------------------------------------------------------------------------
 
-async def _post_result(user_id: int, channel_id: int, embed: discord.Embed) -> None:
+async def _post_result(user_id: int, channel_id: int, embed: discord.Embed, card_id: int) -> None:
     """Post the result embed, replacing a same-user post from the last 10 minutes."""
     channel = bot.get_channel(channel_id)
     if channel is None:
@@ -395,7 +428,8 @@ async def _post_result(user_id: int, channel_id: int, embed: discord.Embed) -> N
             except Exception:
                 pass  # already gone — fine, we still post the new one
 
-    msg = await channel.send(embed=embed)
+    file = _thumbnail_file(card_id)
+    msg = await channel.send(embed=embed, file=file) if file else await channel.send(embed=embed)
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_result_post(conn, user_id, msg.id, channel_id, now)
         await conn.commit()
@@ -461,7 +495,7 @@ async def _finish_training_end(user_id: int, mode: str, data: dict) -> None:
         embed = _build_manual_embed(card_id, data)
         channel_id = TRAINING_MANUAL_CHANNEL_ID
 
-    await _post_result(user_id, channel_id, embed)
+    await _post_result(user_id, channel_id, embed, card_id)
 
     _cancel_timer(user_id)
     await _clear_dashboard(user_id)

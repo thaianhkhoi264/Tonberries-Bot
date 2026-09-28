@@ -94,3 +94,9 @@ TRAINING_DATA_DIR             = "data/training"
 TRAINING_FACTORS_JSON         = f"{TRAINING_DATA_DIR}/factors.json"
 TRAINING_CHARACTERS_JSON      = f"{TRAINING_DATA_DIR}/character.json"
 TRAINING_CHARACTER_NAMES_JSON = f"{TRAINING_DATA_DIR}/character_names.json"
+
+# Trained-character portrait PNGs from the local uma-tools clone (kept fresh by its
+# own daily cron `git pull`, same source as the emoji icons above) — used as the
+# training embeds' thumbnail. Referenced directly, not copied, so it stays in sync
+# for free. Filename convention: trained_chr_icon_<baseId>_<cardId>_02.png.
+UMA_TOOLS_CHARA_ICON_DIR = "/home/piberry/uma-tools/icons/chara"
