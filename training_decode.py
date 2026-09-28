@@ -101,6 +101,20 @@ def status_rank_emoji(rank: int) -> Optional[str]:
     return _status_rank_table().get(f"{rank - 1:02d}")
 
 
+def _stat_table() -> dict:
+    """{ "speed"/"stamina"/"power"/"guts"/"wits"/"pal"/"group" -> Discord emoji markup }."""
+    return _load(EMOJI_MAPPING_JSON).get("stat", {})
+
+
+# training_end's `stats` dict spells this "wiz"; emoji_mapping.json spells it "wits".
+_STAT_KEY_ALIASES = {"wiz": "wits"}
+
+
+def stat_emoji(stat_key: str) -> Optional[str]:
+    """Discord emoji for a training_end `stats` key (e.g. "speed", "wiz"). None if unmapped."""
+    return _stat_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
+
+
 # ---------------------------------------------------------------------------
 # Display helpers — each returns a dict that's always safe to render,
 # falling back to the raw ID when the name table doesn't have an entry.

@@ -368,7 +368,7 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
 
     stats = data.get("stats") or {}
     if stats:
-        stat_line = " / ".join(f"{k.title()} {v}" for k, v in stats.items())
+        stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in stats.items())
         embed.add_field(name="Stats", value=stat_line, inline=False)
 
     skills = data.get("skills") or []
