@@ -38,19 +38,21 @@ MAX_RESULTS_LIST = 8
 # ---------------------------------------------------------------------------
 _emoji_by_skill_id: dict[str, str] = {}   # skillId -> "<:utx_ico_skill_NNNNN:realId>"
 _emoji_by_icon_stem: dict[str, str] = {}  # icon stem -> same emoji string (derived)
+_skill_default_emoji: str = ""            # uma-tools' own "unknown skill" (utx_ico_skill_00000)
 _emoji_mapping_loaded = False
 
 _ICON_STEM_RE = re.compile(r"utx_ico_skill_(\w+):")
 
 
 def _load_emoji_mapping() -> None:
-    global _emoji_by_skill_id, _emoji_by_icon_stem, _emoji_mapping_loaded
+    global _emoji_by_skill_id, _emoji_by_icon_stem, _skill_default_emoji, _emoji_mapping_loaded
     if _emoji_mapping_loaded:
         return
     if os.path.exists(EMOJI_MAPPING_JSON):
         with open(EMOJI_MAPPING_JSON, encoding="utf-8") as f:
             data = json.load(f)
         _emoji_by_skill_id = data.get("skill", {})
+        _skill_default_emoji = data.get("skill_default", "")
         for emoji in set(_emoji_by_skill_id.values()):
             m = _ICON_STEM_RE.search(emoji)
             if m:
@@ -61,9 +63,13 @@ def _load_emoji_mapping() -> None:
 
 
 def skill_icon_emoji_for_id(skill_id: str | None) -> str:
-    """Return the Discord emoji string for a skillId, or '' if not mapped."""
+    """
+    Return the Discord emoji string for a skillId. Falls back to
+    uma-tools' own "unknown skill" question-mark icon (skill_default in
+    emoji_mapping.json) when skill_id isn't mapped, rather than ''.
+    """
     _load_emoji_mapping()
-    return _emoji_by_skill_id.get(str(skill_id), "") if skill_id else ""
+    return _emoji_by_skill_id.get(str(skill_id), "") or _skill_default_emoji
 
 
 def skill_icon_emoji(icon_url: str | None) -> str:

@@ -1092,6 +1092,7 @@
     "920011": "<:utx_ico_skill_20011:1553958649901228112>",
     "920131": "<:utx_ico_skill_20011:1553958649901228112>"
   },
+  "skill_default": "<:utx_ico_skill_00000:1553958555726647427>",
   "star": {
     "active": "<:utx_ico_strong_star_00:1553965778242510931>",
     "inactive": "<:utx_ico_strong_star_01:1553965781010620497>"
