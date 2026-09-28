@@ -20,9 +20,19 @@ Three Discord channels:
   - TRAINING_DASHBOARD_CHANNEL_ID     — one live status message per user
   - TRAINING_MANUAL_CHANNEL_ID        — finished manual-training results
   - TRAINING_INDEPENDENT_CHANNEL_ID   — finished independent-training results
+
+Ambiguous training_end (no persisted training_start state — e.g. the run was
+started on a device that isn't running horseact_network_probe): rather than
+silently trusting the payload's own `mode` field with no corroborating
+context, this DMs the mapped user to ask manual / independent / cancel. The
+reply is plain text, matching autotrain_module.py's DM-command style. No
+timeout — single-user bot, the pending confirmation just waits. A fresh
+training_start OR another ambiguous training_end for the same user cancels
+(deletes) whatever confirmation is still pending, since it's now stale.
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -71,6 +81,15 @@ async def init_db() -> None:
                 message_id INTEGER NOT NULL,
                 channel_id INTEGER NOT NULL,
                 posted_at  TEXT    NOT NULL
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_training_confirmations (
+                user_id        INTEGER PRIMARY KEY,
+                payload        TEXT    NOT NULL,
+                dm_channel_id  INTEGER NOT NULL,
+                dm_message_id  INTEGER NOT NULL,
+                created_at     TEXT    NOT NULL
             )
         """)
         await conn.commit()
@@ -123,6 +142,30 @@ async def _save_result_post(conn, user_id: int, message_id: int, channel_id: int
            VALUES (?, ?, ?, ?)""",
         (user_id, message_id, channel_id, posted_at.isoformat()),
     )
+
+
+async def _get_pending_confirmation(conn, user_id: int) -> dict | None:
+    async with conn.execute(
+        "SELECT payload, dm_channel_id, dm_message_id FROM pending_training_confirmations WHERE user_id=?",
+        (user_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return {"payload": json.loads(row[0]), "dm_channel_id": row[1], "dm_message_id": row[2]}
+
+
+async def _save_pending_confirmation(conn, user_id: int, payload: dict, dm_channel_id: int, dm_message_id: int) -> None:
+    await conn.execute(
+        """INSERT OR REPLACE INTO pending_training_confirmations
+           (user_id, payload, dm_channel_id, dm_message_id, created_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (user_id, json.dumps(payload), dm_channel_id, dm_message_id, datetime.now(timezone.utc).isoformat()),
+    )
+
+
+async def _clear_pending_confirmation(conn, user_id: int) -> None:
+    await conn.execute("DELETE FROM pending_training_confirmations WHERE user_id=?", (user_id,))
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +381,85 @@ async def _post_result(user_id: int, channel_id: int, embed: discord.Embed) -> N
 
 
 # ---------------------------------------------------------------------------
-# Public handlers — called from api_server.py
+# Ambiguous training_end — no persisted training_start state for this user.
+# DM them to ask which mode this actually was, rather than trusting the
+# payload's mode field with no corroborating context.
+# ---------------------------------------------------------------------------
+
+async def _cancel_pending_confirmation(user_id: int) -> None:
+    """Delete a pending confirmation DM (if any) and clear its row. Best-effort."""
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        pending = await _get_pending_confirmation(conn, user_id)
+        if pending is None:
+            return
+        await _clear_pending_confirmation(conn, user_id)
+        await conn.commit()
+
+    try:
+        channel = bot.get_channel(pending["dm_channel_id"]) or await bot.fetch_channel(pending["dm_channel_id"])
+        msg = await channel.fetch_message(pending["dm_message_id"])
+        await msg.delete()
+    except Exception:
+        pass  # already gone, or channel/message unreachable — fine either way
+
+
+async def _request_confirmation(user_id: int, data: dict) -> None:
+    """DM the user asking whether an ambiguous training_end was manual or independent."""
+    await _cancel_pending_confirmation(user_id)  # supersede any confirmation already pending
+
+    char = decode.character_display(data["cardId"])
+    name = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    try:
+        user = await bot.fetch_user(user_id)
+        dm = await user.create_dm()
+        msg = await dm.send(
+            f"I got a training_end for **{name}** with no matching training_start on record — "
+            "I can't tell if this was a manual or independent training.\n"
+            "Reply `manual`, `independent`, or `cancel` here."
+        )
+    except Exception as exc:
+        logger.error(f"[Training] Could not DM user {user_id} for confirmation: {exc}")
+        return
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_pending_confirmation(conn, user_id, data, dm.id, msg.id)
+        await conn.commit()
+
+    logger.info(f"[Training] Requested manual/independent confirmation from user {user_id}")
+
+
+async def _finish_training_end(user_id: int, mode: str, data: dict) -> None:
+    """Build the result embed, post it, and clear per-user training state."""
+    card_id = data["cardId"]
+
+    if mode == "independent":
+        embed = _build_independent_embed(card_id, data)
+        channel_id = TRAINING_INDEPENDENT_CHANNEL_ID
+    else:
+        embed = _build_manual_embed(card_id, data)
+        channel_id = TRAINING_MANUAL_CHANNEL_ID
+
+    await _post_result(user_id, channel_id, embed)
+
+    _cancel_timer(user_id)
+    await _clear_dashboard(user_id)
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _clear_active(conn, user_id)
+        await conn.commit()
+
+    logger.info(f"[Training] training_end for user {user_id}: mode={mode}, cardId={card_id}")
+
+
+# ---------------------------------------------------------------------------
+# Public handlers — called from api_server.py / main.py
 # ---------------------------------------------------------------------------
 
 async def handle_training_start(user_id: int, data: dict) -> None:
+    # A fresh training_start makes any confirmation still awaiting a reply
+    # for this user stale — supersede it.
+    await _cancel_pending_confirmation(user_id)
+
     mode = data["mode"]
     card_id = data["cardId"]
     scenario_id = data.get("scenarioId")
@@ -363,29 +481,46 @@ async def handle_training_start(user_id: int, data: dict) -> None:
     logger.info(f"[Training] training_start for user {user_id}: mode={mode}, cardId={card_id}")
 
 
-async def handle_training_end(user_id: int, data: dict) -> None:
+async def handle_training_end(user_id: int, data: dict) -> str:
+    """Returns "posted" or "pending_confirmation"."""
     async with aiosqlite.connect(LOCAL_DB) as conn:
         active = await _get_active(conn, user_id)
 
+    if active is None:
+        # No corroborating training_start — ask the user rather than
+        # silently trusting the payload's own mode field.
+        await _request_confirmation(user_id, data)
+        return "pending_confirmation"
+
     # Prefer the stored mode (set at training_start time, consistent with the
-    # timer/notification decision already made); fall back to the payload's
-    # own mode if the bot missed training_start (e.g. restarted mid-run).
-    mode = active["mode"] if active else data["mode"]
-    card_id = data["cardId"]
+    # timer/notification decision already made) over the payload's own mode.
+    await _finish_training_end(user_id, active["mode"], data)
+    return "posted"
 
-    if mode == "independent":
-        embed = _build_independent_embed(card_id, data)
-        channel_id = TRAINING_INDEPENDENT_CHANNEL_ID
-    else:
-        embed = _build_manual_embed(card_id, data)
-        channel_id = TRAINING_MANUAL_CHANNEL_ID
 
-    await _post_result(user_id, channel_id, embed)
+async def handle_confirmation_reply(message: discord.Message) -> bool:
+    """Handle a DM reply of manual/independent/cancel to a pending confirmation.
 
-    _cancel_timer(user_id)
-    await _clear_dashboard(user_id)
+    Returns True if this message was a reply to a pending confirmation (and
+    was therefore handled), False if there was nothing pending for this user
+    (caller should treat the message as an ordinary/unrecognized command).
+    """
+    user_id = message.author.id
     async with aiosqlite.connect(LOCAL_DB) as conn:
-        await _clear_active(conn, user_id)
-        await conn.commit()
+        pending = await _get_pending_confirmation(conn, user_id)
+    if pending is None:
+        return False
 
-    logger.info(f"[Training] training_end for user {user_id}: mode={mode}, cardId={card_id}")
+    cmd = message.content.strip().lower()
+    if cmd == "cancel":
+        await _cancel_pending_confirmation(user_id)
+        await message.channel.send("Cancelled — that training_end will be discarded.")
+        return True
+    elif cmd in ("manual", "independent"):
+        await _cancel_pending_confirmation(user_id)
+        await _finish_training_end(user_id, cmd, pending["payload"])
+        await message.channel.send(f"Got it — posted as a {cmd} training result.")
+        return True
+    else:
+        await message.channel.send("Reply `manual`, `independent`, or `cancel` for the training_end I asked about.")
+        return True

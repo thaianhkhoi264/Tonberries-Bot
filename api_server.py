@@ -146,12 +146,16 @@ async def handle_training_end(request):
         return web.json_response({"success": False, "error": error}, status=400)
 
     try:
-        await training_module.handle_training_end(user_id, data)
+        status = await training_module.handle_training_end(user_id, data)
     except Exception as e:
         api_logger.error(f"Error handling training_end for user {user_id}: {e}", exc_info=True)
         return web.json_response({"success": False, "error": "Internal server error"}, status=500)
 
-    return web.json_response({"success": True, "message": "training_end recorded"})
+    message = (
+        "training_end recorded, but no matching training_start was found — DMed the user to confirm mode"
+        if status == "pending_confirmation" else "training_end recorded"
+    )
+    return web.json_response({"success": True, "message": message})
 
 
 async def handle_health_check(request):

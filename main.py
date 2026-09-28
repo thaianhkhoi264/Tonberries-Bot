@@ -285,6 +285,11 @@ async def on_message(message: discord.Message):
     if cmd_lower == "end":
         await autotrain_module.handle_end(message)
         return
+    if cmd_lower in ("manual", "independent", "cancel"):
+        if await training_module.handle_confirmation_reply(message):
+            return
+        # No pending training_end confirmation for this user — fall through
+        # (owner-only handling / "not supported" reply below) as normal.
 
     # Everything below is owner-only — send a helpful reply to everyone else
     if message.author.id not in OWNER_USER_IDS:
