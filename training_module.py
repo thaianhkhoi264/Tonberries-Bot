@@ -523,6 +523,38 @@ async def restore_timers() -> None:
 # slot) via training_support_cards.build_support_card_strip — see _post_result.
 # ---------------------------------------------------------------------------
 
+_FIELD_VALUE_LIMIT = 1024  # Discord's hard cap on a single embed field's value
+
+
+def _add_chunked_field(embed: discord.Embed, name: str, lines: list[str], inline: bool = False) -> None:
+    """Adds `lines` as one field, splitting into multiple numbered fields of the
+    same name if the joined value would exceed Discord's 1024-char field value
+    limit. A character with a lot of skills/sparks, each rendered with a custom
+    emoji (long raw markup — 45+ characters per star, for example), can blow
+    past that limit easily; this is what a real run actually hit in production
+    (500 error, "embeds.0.fields.3.value: Must be 1024 or fewer in length")."""
+    if not lines:
+        return
+
+    chunks: list[str] = []
+    current = ""
+    for line in lines:
+        if len(line) > _FIELD_VALUE_LIMIT:
+            line = line[:_FIELD_VALUE_LIMIT - 1] + "…"  # one absurdly long single entry — truncate it alone
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > _FIELD_VALUE_LIMIT:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+
+    for i, chunk in enumerate(chunks):
+        field_name = name if len(chunks) == 1 else f"{name} ({i + 1}/{len(chunks)})"
+        embed.add_field(name=field_name, value=chunk, inline=inline)
+
+
 def _add_rank_fans_stats(embed: discord.Embed, data: dict) -> None:
     """Rank/Fans/Stats fields — shared by both result embeds (manual has always
     had this data; independent's payload carries the same fields too)."""
@@ -565,9 +597,16 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
             if level != 1:  # level 1 is the default/base state — not worth calling out
                 line += f" Lv. {level}"
             lines.append(line)
-        embed.add_field(name="Skills", value="\n".join(lines), inline=False)
+        _add_chunked_field(embed, "Skills", lines)
 
     return embed
+
+
+# Spark `type` (see training_decode.py / the plan doc's factor-type table) ->
+# in-game display priority. 0=blue (stat), 1=pink (aptitude), 5=green (unique
+# skill); 2/3/4 (white: race win/skill/scenario) and unresolved factors all
+# fall through to the same "everything else" bucket via .get()'s default.
+_SPARK_TYPE_PRIORITY = {0: 0, 1: 1, 5: 2}
 
 
 def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
@@ -585,12 +624,22 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
 
     factors = data.get("factors") or []
     if factors:
+        # In-game ordering: blue (stat) > pink (aptitude) > green (character-unique
+        # skill) sparks first, then everything else (white: race win/skill/scenario)
+        # after, in whatever order the payload had them. Stable sort on original
+        # index handles the "everything else keeps its order" part for free.
+        entries = [(decode.factor_display(f["factorId"]), i) for i, f in enumerate(factors)]
+        entries.sort(key=lambda pair: (_SPARK_TYPE_PRIORITY.get(pair[0]["type"], 3), pair[1]))
+
         lines = []
-        for f in factors:
-            info = decode.factor_display(f["factorId"])
-            stars = decode.spark_star_emojis(info["level"])
-            lines.append(f"{info['name']} {stars}")
-        embed.add_field(name="Sparks", value="\n".join(lines), inline=False)
+        prev_is_priority = None
+        for info, _ in entries:
+            is_priority = info["type"] in _SPARK_TYPE_PRIORITY
+            if prev_is_priority and not is_priority:
+                lines.append("")  # gap between the blue/pink/green sparks and everything else
+            lines.append(f"{info['name']} {decode.spark_star_emojis(info['level'])}")
+            prev_is_priority = is_priority
+        _add_chunked_field(embed, "Sparks", lines)
 
     return embed
 

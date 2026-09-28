@@ -115,17 +115,18 @@ def stat_emoji(stat_key: str) -> Optional[str]:
     return _stat_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
 
 
-def _star_table() -> dict:
-    """{ "active"/"inactive" -> Discord emoji markup } — see tests/upload_misc_icon_emojis.py."""
-    return _load(EMOJI_MAPPING_JSON).get("star", {})
-
-
 def spark_star_emojis(level: int) -> str:
-    """Renders a spark's star level as active/inactive star emojis, capped at 3
-    (the display max — see the HorseACT plan doc's spark verification table)."""
-    active = _star_table().get("active", "★")
-    inactive = _star_table().get("inactive", "☆")
-    return active * min(level, 3) + inactive * max(3 - level, 0)
+    """Renders a spark's star level as its numeral plus a plain Unicode star.
+
+    Went through two custom-Discord-emoji designs first (3 repeated stars,
+    then 1 star + numeral) — both used emoji_mapping.json's "star" entries,
+    45+ raw characters each, and a well-factored character can have 15-25+
+    sparks, which blew past Discord's 1024-char field value limit in
+    production. A plain "⭐" is a single character and carries the same
+    information, so chunking (see _add_chunked_field) should now be rare
+    rather than near-guaranteed for any well-factored character.
+    """
+    return f"{level}⭐"
 
 
 # ---------------------------------------------------------------------------
