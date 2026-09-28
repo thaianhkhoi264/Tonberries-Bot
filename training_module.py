@@ -381,22 +381,15 @@ async def restore_timers() -> None:
 # slot) via training_support_cards.build_support_card_strip — see _post_result.
 # ---------------------------------------------------------------------------
 
-def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
-    char = decode.character_display(card_id)
-    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
-
+def _add_rank_fans_stats(embed: discord.Embed, data: dict) -> None:
+    """Rank/Fans/Stats fields — shared by both result embeds (manual has always
+    had this data; independent's payload carries the same fields too)."""
     rank = data.get("rank")
     rank_score = data.get("rankScore")
     rank_emoji = decode.status_rank_emoji(rank) if isinstance(rank, int) else None
     rank_display = rank_emoji or str(rank if rank is not None else "?")
     rank_value = f"{rank_display} {rank_score:,} pts" if isinstance(rank_score, int) else rank_display
 
-    embed = discord.Embed(title=title, colour=discord.Colour.green())
-    filename = _thumbnail_filename(card_id)
-    if filename:
-        embed.set_thumbnail(url=f"attachment://{filename}")
-    if data.get("supportCards"):
-        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
     embed.add_field(name="Rank", value=rank_value)
     embed.add_field(name="Fans", value=f"{data.get('fans', 0):,}")
 
@@ -404,6 +397,20 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
     if stats:
         stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in stats.items())
         embed.add_field(name="Stats", value=stat_line, inline=False)
+
+
+def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
+    char = decode.character_display(card_id)
+    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    embed = discord.Embed(title=title, colour=discord.Colour.green())
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
+    if data.get("supportCards"):
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
+
+    _add_rank_fans_stats(embed, data)
 
     skills = data.get("skills") or []
     if skills:
@@ -432,13 +439,16 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
     if data.get("supportCards"):
         embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
 
+    _add_rank_fans_stats(embed, data)
+
     factors = data.get("factors") or []
     if factors:
         lines = []
         for f in factors:
             info = decode.factor_display(f["factorId"])
-            lines.append(f"{info['name']} ★{info['level']}")
-        embed.add_field(name="Factors", value="\n".join(lines), inline=False)
+            stars = decode.spark_star_emojis(info["level"])
+            lines.append(f"{info['name']} {stars}")
+        embed.add_field(name="Sparks", value="\n".join(lines), inline=False)
 
     return embed
 

@@ -115,6 +115,19 @@ def stat_emoji(stat_key: str) -> Optional[str]:
     return _stat_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
 
 
+def _star_table() -> dict:
+    """{ "active"/"inactive" -> Discord emoji markup } — see tests/upload_misc_icon_emojis.py."""
+    return _load(EMOJI_MAPPING_JSON).get("star", {})
+
+
+def spark_star_emojis(level: int) -> str:
+    """Renders a spark's star level as active/inactive star emojis, capped at 3
+    (the display max — see the HorseACT plan doc's spark verification table)."""
+    active = _star_table().get("active", "★")
+    inactive = _star_table().get("inactive", "☆")
+    return active * min(level, 3) + inactive * max(3 - level, 0)
+
+
 # ---------------------------------------------------------------------------
 # Display helpers — each returns a dict that's always safe to render,
 # falling back to the raw ID when the name table doesn't have an entry.
