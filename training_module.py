@@ -1,0 +1,391 @@
+"""
+training_module.py
+
+Bot-side state and Discord output for HorseACT training-event payloads
+(training_start / training_end from horseact_network_probe, delivered via
+api_server.py). See Z:\\Claude Projects\\HorseACT RE\\api_contract_plan.md for
+the full payload contract and the reasoning behind these design choices.
+
+Per-user state, persisted in SQLite (LOCAL_DB) so an in-progress Independent
+Training gap (50 minutes) survives a bot restart — same shape as
+autotrain_module.py's timer persistence:
+  1. training_start saves {mode, cardId, scenarioId, ends_at} for that user_id.
+  2. Independent mode schedules a 50-minute "safe to log in" notification;
+     manual mode just waits for training_end.
+  3. training_end looks up the saved mode (falling back to the payload's own
+     mode if the bot missed training_start), builds the result embed, and
+     clears the saved state.
+
+Three Discord channels:
+  - TRAINING_DASHBOARD_CHANNEL_ID     — one live status message per user
+  - TRAINING_MANUAL_CHANNEL_ID        — finished manual-training results
+  - TRAINING_INDEPENDENT_CHANNEL_ID   — finished independent-training results
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+
+import aiosqlite
+import discord
+
+from bot import bot
+from global_config import (
+    LOCAL_DB,
+    TRAINING_DASHBOARD_CHANNEL_ID,
+    TRAINING_MANUAL_CHANNEL_ID,
+    TRAINING_INDEPENDENT_CHANNEL_ID,
+)
+import training_decode as decode
+
+logger = logging.getLogger("training_module")
+
+INDEPENDENT_DURATION = timedelta(minutes=50)
+DUPLICATE_WINDOW = timedelta(minutes=10)
+
+# Active asyncio notification-timer tasks, keyed by user_id — lets us
+# cancel/replace on a re-triggered training_start.
+_active_timers: dict[int, asyncio.Task] = {}
+
+
+# ---------------------------------------------------------------------------
+# DB setup
+# ---------------------------------------------------------------------------
+
+async def init_db() -> None:
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS active_training (
+                user_id          INTEGER PRIMARY KEY,
+                mode             TEXT    NOT NULL,
+                card_id          INTEGER NOT NULL,
+                scenario_id      INTEGER,
+                started_at       TEXT    NOT NULL,
+                ends_at          TEXT,
+                dashboard_msg_id INTEGER
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS training_result_posts (
+                user_id    INTEGER PRIMARY KEY,
+                message_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL,
+                posted_at  TEXT    NOT NULL
+            )
+        """)
+        await conn.commit()
+
+
+async def _get_active(conn, user_id: int) -> dict | None:
+    async with conn.execute(
+        "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id "
+        "FROM active_training WHERE user_id=?",
+        (user_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return {
+        "mode": row[0], "card_id": row[1], "scenario_id": row[2],
+        "started_at": row[3], "ends_at": row[4], "dashboard_msg_id": row[5],
+    }
+
+
+async def _save_active(conn, user_id: int, mode: str, card_id: int, scenario_id: int | None,
+                        started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None) -> None:
+    await conn.execute(
+        """INSERT OR REPLACE INTO active_training
+           (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, mode, card_id, scenario_id, started_at.isoformat(),
+         ends_at.isoformat() if ends_at else None, dashboard_msg_id),
+    )
+
+
+async def _clear_active(conn, user_id: int) -> None:
+    await conn.execute("DELETE FROM active_training WHERE user_id=?", (user_id,))
+
+
+async def _get_result_post(conn, user_id: int) -> dict | None:
+    async with conn.execute(
+        "SELECT message_id, channel_id, posted_at FROM training_result_posts WHERE user_id=?",
+        (user_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return {"message_id": row[0], "channel_id": row[1], "posted_at": row[2]}
+
+
+async def _save_result_post(conn, user_id: int, message_id: int, channel_id: int, posted_at: datetime) -> None:
+    await conn.execute(
+        """INSERT OR REPLACE INTO training_result_posts (user_id, message_id, channel_id, posted_at)
+           VALUES (?, ?, ?, ?)""",
+        (user_id, message_id, channel_id, posted_at.isoformat()),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard channel — one live status message per user
+# ---------------------------------------------------------------------------
+
+def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: bool) -> discord.Embed:
+    char = decode.character_display(card_id)
+    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    if ready:
+        status = "Ready to collect! Log in to finish the run. <a:diapat:1508665594013286400>"
+        colour = discord.Colour.gold()
+    elif mode == "independent" and ends_at:
+        status = f"Independent Training ongoing — ready <t:{int(ends_at.timestamp())}:R>"
+        colour = discord.Colour.blurple()
+    else:
+        status = "Manual Training ongoing — waiting for it to end"
+        colour = discord.Colour.blurple()
+
+    return discord.Embed(title=title, description=status, colour=colour)
+
+
+async def _update_dashboard(user_id: int, mode: str, card_id: int,
+                             ends_at: datetime | None = None, ready: bool = False) -> int | None:
+    """Post or edit this user's dashboard message. Returns the message id."""
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is None:
+        logger.warning("[Training] Dashboard channel not found/configured")
+        return None
+
+    embed = _dashboard_embed(mode, card_id, ends_at, ready)
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        existing = await _get_active(conn, user_id)
+    msg_id = existing["dashboard_msg_id"] if existing else None
+
+    if msg_id:
+        try:
+            msg = await channel.fetch_message(msg_id)
+            await msg.edit(embed=embed)
+            return msg_id
+        except discord.NotFound:
+            pass  # fall through and post a new one
+        except Exception as exc:
+            logger.error(f"[Training] Failed to edit dashboard message for {user_id}: {exc}")
+
+    try:
+        msg = await channel.send(embed=embed)
+        return msg.id
+    except Exception as exc:
+        logger.error(f"[Training] Failed to send dashboard message for {user_id}: {exc}")
+        return None
+
+
+async def _clear_dashboard(user_id: int) -> None:
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        existing = await _get_active(conn, user_id)
+    if not existing or not existing["dashboard_msg_id"]:
+        return
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is None:
+        return
+    try:
+        msg = await channel.fetch_message(existing["dashboard_msg_id"])
+        await msg.delete()
+    except Exception:
+        pass  # already gone — fine
+
+
+# ---------------------------------------------------------------------------
+# Independent-mode "safe to log in" timer
+# ---------------------------------------------------------------------------
+
+async def _run_notification_timer(user_id: int, mode: str, card_id: int, ends_at: datetime) -> None:
+    now = datetime.now(timezone.utc)
+    wait = (ends_at - now).total_seconds()
+    if wait > 0:
+        await asyncio.sleep(wait)
+
+    _active_timers.pop(user_id, None)
+
+    # Only fire if this training is still the one we scheduled for — a
+    # training_end may have already cleared it (early finish / restart race).
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        row = await _get_active(conn, user_id)
+    if row is None or row["mode"] != "independent":
+        return
+
+    await _update_dashboard(user_id, mode, card_id, ends_at=ends_at, ready=True)
+    logger.info(f"[Training] Ready-to-collect notification fired for user {user_id}")
+
+
+def _schedule_notification(user_id: int, mode: str, card_id: int, ends_at: datetime) -> None:
+    old = _active_timers.pop(user_id, None)
+    if old and not old.done():
+        old.cancel()
+    _active_timers[user_id] = asyncio.create_task(
+        _run_notification_timer(user_id, mode, card_id, ends_at)
+    )
+
+
+def _cancel_timer(user_id: int) -> None:
+    old = _active_timers.pop(user_id, None)
+    if old and not old.done():
+        old.cancel()
+
+
+async def restore_timers() -> None:
+    """Reschedule all pending independent-mode timers on bot startup.
+
+    If a timer already expired while the bot was down, it fires immediately
+    (edits the dashboard to "ready") instead of sleeping.
+    """
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        async with conn.execute(
+            "SELECT user_id, mode, card_id, ends_at FROM active_training "
+            "WHERE mode='independent' AND ends_at IS NOT NULL"
+        ) as cur:
+            rows = await cur.fetchall()
+
+    count = 0
+    for user_id, mode, card_id, ends_at_str in rows:
+        ends_at = datetime.fromisoformat(ends_at_str)
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        _schedule_notification(user_id, mode, card_id, ends_at)
+        count += 1
+    logger.info(f"[Training] Restored {count} pending training timer(s)")
+
+
+# ---------------------------------------------------------------------------
+# Result embeds
+# ---------------------------------------------------------------------------
+
+def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
+    char = decode.character_display(card_id)
+    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    rank = data.get("rank", "?")
+    rank_score = data.get("rankScore")
+    rank_value = f"{rank} ({rank_score:,} pts)" if isinstance(rank_score, int) else str(rank)
+
+    embed = discord.Embed(title=title, colour=discord.Colour.green())
+    embed.add_field(name="Rank", value=rank_value)
+    embed.add_field(name="Fans", value=f"{data.get('fans', 0):,}")
+
+    stats = data.get("stats") or {}
+    if stats:
+        stat_line = " / ".join(f"{k.title()} {v}" for k, v in stats.items())
+        embed.add_field(name="Stats", value=stat_line, inline=False)
+
+    skills = data.get("skills") or []
+    if skills:
+        lines = []
+        for s in skills:
+            info = decode.skill_display(s["skillId"])
+            lines.append(f"{info['name']} (Lv. {s.get('level', '?')})")
+        embed.add_field(name="Skills", value="\n".join(lines), inline=False)
+
+    return embed
+
+
+def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
+    char = decode.character_display(card_id)
+    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    embed = discord.Embed(title=title, colour=discord.Colour.purple())
+
+    factors = data.get("factors") or []
+    if factors:
+        lines = []
+        for f in factors:
+            info = decode.factor_display(f["factorId"])
+            lines.append(f"{info['name']} ★{info['level']}")
+        embed.add_field(name="Factors", value="\n".join(lines), inline=False)
+
+    return embed
+
+
+# ---------------------------------------------------------------------------
+# Duplicate-result handling
+# ---------------------------------------------------------------------------
+
+async def _post_result(user_id: int, channel_id: int, embed: discord.Embed) -> None:
+    """Post the result embed, replacing a same-user post from the last 10 minutes."""
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        logger.warning(f"[Training] Results channel {channel_id} not found/configured")
+        return
+
+    now = datetime.now(timezone.utc)
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        existing = await _get_result_post(conn, user_id)
+
+    if existing:
+        posted_at = datetime.fromisoformat(existing["posted_at"])
+        if posted_at.tzinfo is None:
+            posted_at = posted_at.replace(tzinfo=timezone.utc)
+        if now - posted_at < DUPLICATE_WINDOW:
+            try:
+                old_channel = bot.get_channel(existing["channel_id"]) or channel
+                old_msg = await old_channel.fetch_message(existing["message_id"])
+                await old_msg.delete()
+                logger.info(f"[Training] Replaced duplicate training_end result for user {user_id}")
+            except Exception:
+                pass  # already gone — fine, we still post the new one
+
+    msg = await channel.send(embed=embed)
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_result_post(conn, user_id, msg.id, channel_id, now)
+        await conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Public handlers — called from api_server.py
+# ---------------------------------------------------------------------------
+
+async def handle_training_start(user_id: int, data: dict) -> None:
+    mode = data["mode"]
+    card_id = data["cardId"]
+    scenario_id = data.get("scenarioId")
+    started_at = datetime.fromtimestamp(data["timestamp"] / 1000, tz=timezone.utc)
+
+    ends_at = started_at + INDEPENDENT_DURATION if mode == "independent" else None
+
+    dashboard_msg_id = await _update_dashboard(user_id, mode, card_id, ends_at=ends_at)
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_active(conn, user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id)
+        await conn.commit()
+
+    if mode == "independent":
+        _schedule_notification(user_id, mode, card_id, ends_at)
+    else:
+        _cancel_timer(user_id)
+
+    logger.info(f"[Training] training_start for user {user_id}: mode={mode}, cardId={card_id}")
+
+
+async def handle_training_end(user_id: int, data: dict) -> None:
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        active = await _get_active(conn, user_id)
+
+    # Prefer the stored mode (set at training_start time, consistent with the
+    # timer/notification decision already made); fall back to the payload's
+    # own mode if the bot missed training_start (e.g. restarted mid-run).
+    mode = active["mode"] if active else data["mode"]
+    card_id = data["cardId"]
+
+    if mode == "independent":
+        embed = _build_independent_embed(card_id, data)
+        channel_id = TRAINING_INDEPENDENT_CHANNEL_ID
+    else:
+        embed = _build_manual_embed(card_id, data)
+        channel_id = TRAINING_MANUAL_CHANNEL_ID
+
+    await _post_result(user_id, channel_id, embed)
+
+    _cancel_timer(user_id)
+    await _clear_dashboard(user_id)
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _clear_active(conn, user_id)
+        await conn.commit()
+
+    logger.info(f"[Training] training_end for user {user_id}: mode={mode}, cardId={card_id}")

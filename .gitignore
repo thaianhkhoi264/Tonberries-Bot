@@ -1,5 +1,6 @@
 .env
 local_config.py
+api_keys.json
 data/
 logs/
 __pycache__/

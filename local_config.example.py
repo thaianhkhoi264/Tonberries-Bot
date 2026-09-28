@@ -17,3 +17,15 @@ GENERAL_CHANNEL_ID = 0  # uma-chat-v2 channel
 # Circles — uma.moe API
 CIRCLE_ID         = ""  # uma.moe circle ID for Tonberries
 CIRCLE_CHANNEL_ID = 0   # Channel where circle stats are posted
+
+# HorseACT training-event API (horseact_network_probe integration)
+TRAINING_DASHBOARD_CHANNEL_ID    = 0  # Live per-user training status (ongoing / waiting for it to end)
+TRAINING_MANUAL_CHANNEL_ID       = 0  # Finished manual-training results (name, rating, stats, skills)
+TRAINING_INDEPENDENT_CHANNEL_ID  = 0  # Finished independent-training results (name, factors)
+
+# Maps api_keys.json descriptions -> Discord user IDs, same pattern as Gacha-Timer-Bot's
+# USER_DESCRIPTION_TO_ID. horseact_network_probe issues its own per-user API key; add an
+# entry here (and a matching key in api_keys.json) for each person running the plugin.
+TRAINING_USER_DESCRIPTION_TO_ID = {
+    # "SomeUser": 0,
+}

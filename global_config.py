@@ -11,6 +11,10 @@ from local_config import (
     GENERAL_CHANNEL_ID,
     CIRCLE_ID,
     CIRCLE_CHANNEL_ID,
+    TRAINING_DASHBOARD_CHANNEL_ID,
+    TRAINING_MANUAL_CHANNEL_ID,
+    TRAINING_INDEPENDENT_CHANNEL_ID,
+    TRAINING_USER_DESCRIPTION_TO_ID,
 )
 
 # Tonberries-Bot Configuration
@@ -69,3 +73,19 @@ TRAINEES_DB               = "data/trainees.db"
 PETIT_IMAGE_DIR           = "data/petit_images"             # umamusu.wiki _0011 chibis
 PETIT_IMAGE_FANDOM_DIR    = "data/petit_images_fandom"      # Fandom gap-fills
 PETIT_IMAGE_NORMALIZED_DIR = "data/petit_images_normalized" # alpha-trimmed, both sources
+
+# --- HorseACT training-event API (horseact_network_probe integration) ---
+
+# REST API server (api_server.py), mirroring Gacha-Timer-Bot's setup on the same Pi
+# but on a different port (Gacha-Timer-Bot already owns 8080).
+API_ENABLED = os.getenv("API_ENABLED", "true").lower() == "true"
+API_HOST    = os.getenv("API_HOST", "0.0.0.0")
+API_PORT    = int(os.getenv("API_PORT", "8081"))
+
+# factors.json / character.json / character_names.json from uma.moe (global game data),
+# refreshed daily by training_data_sync.py. Skill name data reuses skill_sync.py's
+# existing SKILL_DATA_JSON / SKILL_NAMES_JSON above rather than duplicating that fetch.
+TRAINING_DATA_DIR             = "data/training"
+TRAINING_FACTORS_JSON         = f"{TRAINING_DATA_DIR}/factors.json"
+TRAINING_CHARACTERS_JSON      = f"{TRAINING_DATA_DIR}/character.json"
+TRAINING_CHARACTER_NAMES_JSON = f"{TRAINING_DATA_DIR}/character_names.json"

@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 
 from bot import bot, token, logger
-from global_config import OWNER_USER_IDS, MAIN_OWNER_ID, MAIN_SERVER_ID
+from global_config import OWNER_USER_IDS, MAIN_OWNER_ID, MAIN_SERVER_ID, API_ENABLED, API_HOST, API_PORT
 import uma_module
 import notification_module
 import circles_module
@@ -20,6 +20,9 @@ import parent_module
 import stamina_module
 import role_module
 import players_module
+import training_module
+import training_data_sync
+import api_server
 
 
 # ---------------------------------------------------------------------------
@@ -195,9 +198,12 @@ async def on_ready():
     await uma_module.start_background_tasks()
     await circles_module.start_background_task()
     await autotrain_module.restore_timers()
+    await training_module.init_db()
+    await training_module.restore_timers()
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")
     await skill_sync.sync_if_stale(bot)
+    await training_data_sync.sync_if_stale(bot)
     cm_module.load_local_data_if_needed()
     skills_module.load_uma_data()
     parent_module.load_parent_data()
@@ -210,6 +216,16 @@ async def on_ready():
     if _tonberries:
         await role_module.sync_existing_fan_roles(_tonberries)
     await role_module.start_background_tasks()
+
+    if API_ENABLED:
+        try:
+            runner = await api_server.start_api_server(host=API_HOST, port=API_PORT)
+            logger.info(f"[Bot] API server enabled on http://{API_HOST}:{API_PORT}")
+        except Exception as e:
+            logger.error(f"[Bot] API server failed to start: {e}", exc_info=True)
+    else:
+        logger.info("[Bot] API server disabled (API_ENABLED=false)")
+
     await _send_restart_dm()
 
 
