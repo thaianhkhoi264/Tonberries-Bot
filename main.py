@@ -202,6 +202,8 @@ async def on_ready():
     await circles_module.start_background_task()
     await autotrain_module.restore_timers()
     await training_module.init_db()
+    await training_module.ensure_dashboard_header()
+    await training_module.clean_dashboard_channel()
     await training_module.restore_timers()
     await bot.tree.sync()
     logger.info("[Bot] Slash commands synced")

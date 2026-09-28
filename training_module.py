@@ -111,6 +111,12 @@ async def init_db() -> None:
                 created_at     TEXT    NOT NULL
             )
         """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS dashboard_header (
+                id         INTEGER PRIMARY KEY CHECK (id = 1),
+                message_id INTEGER NOT NULL
+            )
+        """)
         await conn.commit()
 
 
@@ -202,6 +208,105 @@ async def _save_pending_confirmation(conn, user_id: int, payload: dict, dm_chann
 
 async def _clear_pending_confirmation(conn, user_id: int) -> None:
     await conn.execute("DELETE FROM pending_training_confirmations WHERE user_id=?", (user_id,))
+
+
+async def _get_dashboard_header(conn) -> int | None:
+    async with conn.execute("SELECT message_id FROM dashboard_header WHERE id=1") as cur:
+        row = await cur.fetchone()
+    return row[0] if row else None
+
+
+async def _save_dashboard_header(conn, message_id: int) -> None:
+    await conn.execute(
+        "INSERT OR REPLACE INTO dashboard_header (id, message_id) VALUES (1, ?)", (message_id,)
+    )
+
+
+_DASHBOARD_HEADER_TEXT = (
+    "# Training Dashboard\n\n"
+    "This channel shows live training status. When a run starts, a card appears here with "
+    "the character and current progress. Once the run finishes, the card is removed and the "
+    "result gets posted to the manual or independent results channel.\n\n"
+    "For Independent Training, you also get a ping here once the 50 minute timer ends."
+)
+
+
+async def ensure_dashboard_header() -> None:
+    """Posts (and pins) a one time explainer at the top of the dashboard channel, as a
+    plain markdown message rather than an embed. Safe to call on every startup: skips
+    reposting if it's already there."""
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is None:
+        logger.warning("[Training] Dashboard channel not found/configured, skipping header")
+        return
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        existing_id = await _get_dashboard_header(conn)
+
+    if existing_id:
+        try:
+            await channel.fetch_message(existing_id)
+            return  # already posted and still there
+        except discord.NotFound:
+            pass  # was deleted — fall through and repost
+        except Exception as exc:
+            logger.error(f"[Training] Failed to check dashboard header: {exc}")
+            return
+
+    try:
+        msg = await channel.send(_DASHBOARD_HEADER_TEXT)
+    except Exception as exc:
+        logger.error(f"[Training] Failed to post dashboard header: {exc}")
+        return
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_dashboard_header(conn, msg.id)
+        await conn.commit()
+
+    try:
+        await msg.pin()
+    except Exception as exc:
+        logger.warning(f"[Training] Could not pin dashboard header (missing permission?): {exc}")
+
+    logger.info("[Training] Posted dashboard header")
+
+
+async def clean_dashboard_channel() -> None:
+    """Deletes anything in the dashboard channel that isn't currently tracked: the
+    header, or a live status/ready-ping message from an in-progress training. Catches
+    non-bot messages and orphaned bot messages left over from a crash or a bug alike,
+    since both are just "not in keep_ids" from this function's point of view. Runs on
+    every startup, before the API server starts accepting new events."""
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is None:
+        return
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        header_id = await _get_dashboard_header(conn)
+        async with conn.execute(
+            "SELECT dashboard_msg_id, ready_notification_msg_id FROM active_training"
+        ) as cur:
+            rows = await cur.fetchall()
+
+    keep_ids = {header_id} if header_id else set()
+    for dashboard_msg_id, ready_notification_msg_id in rows:
+        if dashboard_msg_id:
+            keep_ids.add(dashboard_msg_id)
+        if ready_notification_msg_id:
+            keep_ids.add(ready_notification_msg_id)
+
+    deleted = 0
+    async for msg in channel.history(limit=None):
+        if msg.id in keep_ids:
+            continue
+        try:
+            await msg.delete()
+            deleted += 1
+        except Exception as exc:
+            logger.error(f"[Training] Failed to delete stray dashboard message {msg.id}: {exc}")
+
+    if deleted:
+        logger.info(f"[Training] Cleaned {deleted} stray message(s) from the dashboard channel")
 
 
 # ---------------------------------------------------------------------------
