@@ -715,7 +715,7 @@ def _skill_line(item: dict, underline: bool = False) -> str:
     """Format one skill line with icon emoji, character name and verdict."""
     info = _char_info.get(item["sid"], ("", ""))
     char_part = f" ({info[0]})" if info[0] else ""
-    icon = skills_module.skill_icon_emoji(info[1]) if info[1] else "•"
+    icon = skills_module.skill_icon_emoji_for_id(item["sid"]) or "•"
     name = f"__**{item['name']}**__" if underline else f"**{item['name']}**"
     return f"{icon} {name}{char_part}: {item['verdict']}"
 
