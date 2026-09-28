@@ -66,15 +66,24 @@ async def init_db() -> None:
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS active_training (
-                user_id          INTEGER PRIMARY KEY,
-                mode             TEXT    NOT NULL,
-                card_id          INTEGER NOT NULL,
-                scenario_id      INTEGER,
-                started_at       TEXT    NOT NULL,
-                ends_at          TEXT,
-                dashboard_msg_id INTEGER
+                user_id                INTEGER PRIMARY KEY,
+                mode                   TEXT    NOT NULL,
+                card_id                INTEGER NOT NULL,
+                scenario_id            INTEGER,
+                started_at             TEXT    NOT NULL,
+                ends_at                TEXT,
+                dashboard_msg_id       INTEGER,
+                support_card_ids       TEXT,
+                friend_support_card_id INTEGER
             )
         """)
+        # Migrate pre-existing installs (CREATE TABLE IF NOT EXISTS above is a
+        # no-op once the table already exists, so add the new columns here).
+        for column, coltype in (("support_card_ids", "TEXT"), ("friend_support_card_id", "INTEGER")):
+            try:
+                await conn.execute(f"ALTER TABLE active_training ADD COLUMN {column} {coltype}")
+            except Exception:
+                pass  # already has the column
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS training_result_posts (
                 user_id    INTEGER PRIMARY KEY,
@@ -97,8 +106,8 @@ async def init_db() -> None:
 
 async def _get_active(conn, user_id: int) -> dict | None:
     async with conn.execute(
-        "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id "
-        "FROM active_training WHERE user_id=?",
+        "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id, "
+        "support_card_ids, friend_support_card_id FROM active_training WHERE user_id=?",
         (user_id,),
     ) as cur:
         row = await cur.fetchone()
@@ -107,17 +116,23 @@ async def _get_active(conn, user_id: int) -> dict | None:
     return {
         "mode": row[0], "card_id": row[1], "scenario_id": row[2],
         "started_at": row[3], "ends_at": row[4], "dashboard_msg_id": row[5],
+        "support_card_ids": json.loads(row[6]) if row[6] else None,
+        "friend_support_card_id": row[7],
     }
 
 
 async def _save_active(conn, user_id: int, mode: str, card_id: int, scenario_id: int | None,
-                        started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None) -> None:
+                        started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None,
+                        support_card_ids: list | None = None, friend_support_card_id: int | None = None) -> None:
     await conn.execute(
         """INSERT OR REPLACE INTO active_training
-           (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,
+            support_card_ids, friend_support_card_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (user_id, mode, card_id, scenario_id, started_at.isoformat(),
-         ends_at.isoformat() if ends_at else None, dashboard_msg_id),
+         ends_at.isoformat() if ends_at else None, dashboard_msg_id,
+         json.dumps(support_card_ids) if support_card_ids is not None else None,
+         friend_support_card_id),
     )
 
 
@@ -299,6 +314,12 @@ async def restore_timers() -> None:
 
 # ---------------------------------------------------------------------------
 # Result embeds
+#
+# Both training_end shapes also carry a `supportCards` array (6 deck slots —
+# 5 regular + 1 friend at position 6 — each with the exp/limitBreakCount the
+# slot ended the run with). It's accepted in `data` here like everything
+# else, but intentionally not rendered yet — deferred pending a decision on
+# how to display it (and its own supportCardId lookup table).
 # ---------------------------------------------------------------------------
 
 def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
@@ -465,12 +486,19 @@ async def handle_training_start(user_id: int, data: dict) -> None:
     scenario_id = data.get("scenarioId")
     started_at = datetime.fromtimestamp(data["timestamp"] / 1000, tz=timezone.utc)
 
+    # Accepted and persisted for later use — not shown in any embed yet.
+    # friendSupportCardId is omitted entirely (not null) on runs with no
+    # friend support card, hence .get() rather than an index.
+    support_card_ids = data.get("supportCardIds")
+    friend_support_card_id = data.get("friendSupportCardId")
+
     ends_at = started_at + INDEPENDENT_DURATION if mode == "independent" else None
 
     dashboard_msg_id = await _update_dashboard(user_id, mode, card_id, ends_at=ends_at)
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
-        await _save_active(conn, user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id)
+        await _save_active(conn, user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,
+                            support_card_ids, friend_support_card_id)
         await conn.commit()
 
     if mode == "independent":
