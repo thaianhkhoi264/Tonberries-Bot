@@ -47,7 +47,9 @@ from global_config import (
     TRAINING_MANUAL_CHANNEL_ID,
     TRAINING_INDEPENDENT_CHANNEL_ID,
 )
+import skills_module
 import training_decode as decode
+import training_support_cards
 
 logger = logging.getLogger("training_module")
 
@@ -204,11 +206,35 @@ def _thumbnail_file(card_id: int) -> discord.File | None:
     return discord.File(path, filename=os.path.basename(path))
 
 
+# Support-card strip — training_end's `image` (bottom, full-width) slot. Same
+# filename-vs-File split as the thumbnail above, and for the same reason.
+_SUPPORT_STRIP_FILENAME = "support_cards.png"
+
+
+def _support_strip_file(data: dict) -> discord.File | None:
+    support_cards = data.get("supportCards")
+    if not support_cards:
+        return None
+    buf = training_support_cards.build_support_card_strip(support_cards)
+    if buf is None:
+        return None
+    return discord.File(buf, filename=_SUPPORT_STRIP_FILENAME)
+
+
+def _dashboard_strip_file(support_card_ids: list | None, friend_support_card_id: int | None) -> discord.File | None:
+    """training_start version — no limitBreakCount yet, so no LB stamps (see training_support_cards.py)."""
+    buf = training_support_cards.build_support_card_ids_strip(support_card_ids, friend_support_card_id)
+    if buf is None:
+        return None
+    return discord.File(buf, filename=_SUPPORT_STRIP_FILENAME)
+
+
 # ---------------------------------------------------------------------------
 # Dashboard channel — one live status message per user
 # ---------------------------------------------------------------------------
 
-def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: bool) -> discord.Embed:
+def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: bool,
+                      support_card_ids: list | None = None, friend_support_card_id: int | None = None) -> discord.Embed:
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
@@ -226,18 +252,21 @@ def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: b
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
+    if support_card_ids or friend_support_card_id is not None:
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
     return embed
 
 
-async def _update_dashboard(user_id: int, mode: str, card_id: int,
-                             ends_at: datetime | None = None, ready: bool = False) -> int | None:
+async def _update_dashboard(user_id: int, mode: str, card_id: int, ends_at: datetime | None = None,
+                             ready: bool = False, support_card_ids: list | None = None,
+                             friend_support_card_id: int | None = None) -> int | None:
     """Post or edit this user's dashboard message. Returns the message id."""
     channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
     if channel is None:
         logger.warning("[Training] Dashboard channel not found/configured")
         return None
 
-    embed = _dashboard_embed(mode, card_id, ends_at, ready)
+    embed = _dashboard_embed(mode, card_id, ends_at, ready, support_card_ids, friend_support_card_id)
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         existing = await _get_active(conn, user_id)
@@ -246,8 +275,9 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int,
     if msg_id:
         try:
             msg = await channel.fetch_message(msg_id)
-            file = _thumbnail_file(card_id)
-            await msg.edit(embed=embed, attachments=[file] if file else [])
+            files = [f for f in (_thumbnail_file(card_id),
+                                  _dashboard_strip_file(support_card_ids, friend_support_card_id)) if f is not None]
+            await msg.edit(embed=embed, attachments=files)
             return msg_id
         except discord.NotFound:
             pass  # fall through and post a new one
@@ -255,8 +285,9 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int,
             logger.error(f"[Training] Failed to edit dashboard message for {user_id}: {exc}")
 
     try:
-        file = _thumbnail_file(card_id)
-        msg = await channel.send(embed=embed, file=file) if file else await channel.send(embed=embed)
+        files = [f for f in (_thumbnail_file(card_id),
+                              _dashboard_strip_file(support_card_ids, friend_support_card_id)) if f is not None]
+        msg = await channel.send(embed=embed, files=files) if files else await channel.send(embed=embed)
         return msg.id
     except Exception as exc:
         logger.error(f"[Training] Failed to send dashboard message for {user_id}: {exc}")
@@ -297,7 +328,9 @@ async def _run_notification_timer(user_id: int, mode: str, card_id: int, ends_at
     if row is None or row["mode"] != "independent":
         return
 
-    await _update_dashboard(user_id, mode, card_id, ends_at=ends_at, ready=True)
+    await _update_dashboard(user_id, mode, card_id, ends_at=ends_at, ready=True,
+                             support_card_ids=row["support_card_ids"],
+                             friend_support_card_id=row["friend_support_card_id"])
     logger.info(f"[Training] Ready-to-collect notification fired for user {user_id}")
 
 
@@ -344,9 +377,8 @@ async def restore_timers() -> None:
 #
 # Both training_end shapes also carry a `supportCards` array (6 deck slots —
 # 5 regular + 1 friend at position 6 — each with the exp/limitBreakCount the
-# slot ended the run with). It's accepted in `data` here like everything
-# else, but intentionally not rendered yet — deferred pending a decision on
-# how to display it (and its own supportCardId lookup table).
+# slot ended the run with). Rendered as the embed's `image` (bottom, full-width
+# slot) via training_support_cards.build_support_card_strip — see _post_result.
 # ---------------------------------------------------------------------------
 
 def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
@@ -363,6 +395,8 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
+    if data.get("supportCards"):
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
     embed.add_field(name="Rank", value=rank_value)
     embed.add_field(name="Fans", value=f"{data.get('fans', 0):,}")
 
@@ -376,7 +410,12 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
         lines = []
         for s in skills:
             info = decode.skill_display(s["skillId"])
-            lines.append(f"{info['name']} (Lv. {s.get('level', '?')})")
+            emoji = skills_module.skill_icon_emoji_for_id(s["skillId"])
+            level = s.get("level", 1)
+            line = f"{emoji} {info['name']}"
+            if level != 1:  # level 1 is the default/base state — not worth calling out
+                line += f" Lv. {level}"
+            lines.append(line)
         embed.add_field(name="Skills", value="\n".join(lines), inline=False)
 
     return embed
@@ -390,6 +429,8 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
+    if data.get("supportCards"):
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
 
     factors = data.get("factors") or []
     if factors:
@@ -406,7 +447,7 @@ def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
 # Duplicate-result handling
 # ---------------------------------------------------------------------------
 
-async def _post_result(user_id: int, channel_id: int, embed: discord.Embed, card_id: int) -> None:
+async def _post_result(user_id: int, channel_id: int, embed: discord.Embed, card_id: int, data: dict) -> None:
     """Post the result embed, replacing a same-user post from the last 10 minutes."""
     channel = bot.get_channel(channel_id)
     if channel is None:
@@ -430,8 +471,8 @@ async def _post_result(user_id: int, channel_id: int, embed: discord.Embed, card
             except Exception:
                 pass  # already gone — fine, we still post the new one
 
-    file = _thumbnail_file(card_id)
-    msg = await channel.send(embed=embed, file=file) if file else await channel.send(embed=embed)
+    files = [f for f in (_thumbnail_file(card_id), _support_strip_file(data)) if f is not None]
+    msg = await channel.send(embed=embed, files=files) if files else await channel.send(embed=embed)
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_result_post(conn, user_id, msg.id, channel_id, now)
         await conn.commit()
@@ -497,7 +538,7 @@ async def _finish_training_end(user_id: int, mode: str, data: dict) -> None:
         embed = _build_manual_embed(card_id, data)
         channel_id = TRAINING_MANUAL_CHANNEL_ID
 
-    await _post_result(user_id, channel_id, embed, card_id)
+    await _post_result(user_id, channel_id, embed, card_id, data)
 
     _cancel_timer(user_id)
     await _clear_dashboard(user_id)
@@ -522,7 +563,6 @@ async def handle_training_start(user_id: int, data: dict) -> None:
     scenario_id = data.get("scenarioId")
     started_at = datetime.fromtimestamp(data["timestamp"] / 1000, tz=timezone.utc)
 
-    # Accepted and persisted for later use — not shown in any embed yet.
     # friendSupportCardId is omitted entirely (not null) on runs with no
     # friend support card, hence .get() rather than an index.
     support_card_ids = data.get("supportCardIds")
@@ -530,7 +570,9 @@ async def handle_training_start(user_id: int, data: dict) -> None:
 
     ends_at = started_at + INDEPENDENT_DURATION if mode == "independent" else None
 
-    dashboard_msg_id = await _update_dashboard(user_id, mode, card_id, ends_at=ends_at)
+    dashboard_msg_id = await _update_dashboard(user_id, mode, card_id, ends_at=ends_at,
+                                                support_card_ids=support_card_ids,
+                                                friend_support_card_id=friend_support_card_id)
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_active(conn, user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,

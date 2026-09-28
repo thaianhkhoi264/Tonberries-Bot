@@ -100,3 +100,8 @@ TRAINING_CHARACTER_NAMES_JSON = f"{TRAINING_DATA_DIR}/character_names.json"
 # training embeds' thumbnail. Referenced directly, not copied, so it stays in sync
 # for free. Filename convention: trained_chr_icon_<baseId>_<cardId>_02.png.
 UMA_TOOLS_CHARA_ICON_DIR = "/home/piberry/uma-tools/icons/chara"
+
+# Support-card art (256x256 PNGs), same uma-tools clone — used to build the
+# training_end result embeds' `image` (the 6-card horizontal strip), from the
+# payload's supportCards array. Filename convention: support_card_s_<supportCardId>.png.
+UMA_TOOLS_SUPPORT_ICON_DIR = "/home/piberry/uma-tools/icons/support"

@@ -152,5 +152,12 @@ def skill_display(skill_id: int) -> dict:
     entry = _skill_names_table().get(str(skill_id))
     if entry is None:
         return {"name": f"Unknown skill ({skill_id})", "resolved": False}
-    name = entry[1] if isinstance(entry, list) and len(entry) > 1 else str(entry)
+    if isinstance(entry, list):
+        # Normally [japanese_name, english_name], but a fair number of entries
+        # (e.g. "100161": ["Shadow Break"]) only carry one element — take it
+        # rather than falling through to str(entry), which stringified the
+        # whole list literally (e.g. "['Shadow Break']").
+        name = entry[1] if len(entry) > 1 else (entry[0] if entry else str(skill_id))
+    else:
+        name = str(entry)
     return {"name": name, "resolved": True}
