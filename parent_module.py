@@ -122,8 +122,8 @@ _SKILL_DEP_RE  = re.compile(r'activate_count_\w+\s*>=\s*\d+')
 
 _skill_data:      dict      = {}
 _skill_names:     dict      = {}
-# sid (9XXXXX) → (character_name, icon_url)
-_char_info:       dict[str, tuple[str, str]] = {}
+# sid (9XXXXX) → character_name
+_char_info:       dict[str, str] = {}
 # skills.db character_name → uma_jp_data.db character_id string
 _char_name_to_id: dict[str, str] = {}
 _base_char_ids:   set[str]  = set()
@@ -156,13 +156,13 @@ def load_parent_data() -> None:
     else:
         logger.warning(f"[Parent] {GT_GLOBAL_CHARS_JSON} not found — run tests/scrape_global_chars.py or wait for weekly refresh")
 
-    # Character info from skills.db (character_name + icon_url for each 9XXXXX skill)
+    # Character name from skills.db for each 9XXXXX skill
     all_9sids = [sid for sid in _skill_data if sid.startswith("9")]
     _char_info = _load_character_info(all_9sids, SKILLS_DB)
     logger.info(f"[Parent] Loaded character info for {len(_char_info)} inherited skills")
 
     # character_name → character_id mapping via uma_jp_data.db
-    unique_names = list({info[0] for info in _char_info.values() if info[0]})
+    unique_names = list({name for name in _char_info.values() if name})
     _char_name_to_id = _build_char_name_to_id(unique_names, SHARED_GAMETORA_DB)
     logger.info(f"[Parent] Resolved {len(_char_name_to_id)}/{len(unique_names)} character names to IDs")
 
@@ -181,9 +181,9 @@ def _load_gt_global_char_ids(json_path: str) -> set[str]:
         return set()
 
 
-def _load_character_info(sids: list[str], db_path: str) -> dict[str, tuple[str, str]]:
+def _load_character_info(sids: list[str], db_path: str) -> dict[str, str]:
     """
-    Query skills.db for (character_name, icon_url) for each 9XXXXX sid.
+    Query skills.db for character_name for each 9XXXXX sid.
     Converts 9XXXXX → 1XXXXX for the DB lookup; results are keyed by 9XXXXX.
     """
     if not sids or not os.path.exists(db_path):
@@ -199,11 +199,11 @@ def _load_character_info(sids: list[str], db_path: str) -> dict[str, tuple[str, 
             db.row_factory = sqlite3.Row
             placeholders = ",".join("?" * len(conv))
             rows = db.execute(
-                f"SELECT skill_id, character_name, icon_url FROM skills WHERE skill_id IN ({placeholders})",
+                f"SELECT skill_id, character_name FROM skills WHERE skill_id IN ({placeholders})",
                 list(conv.keys()),
             ).fetchall()
         return {
-            conv[row["skill_id"]]: (row["character_name"] or "", row["icon_url"] or "")
+            conv[row["skill_id"]]: row["character_name"] or ""
             for row in rows
             if row["skill_id"] in conv
         }
@@ -713,8 +713,8 @@ def build_parent_skills(
 
 def _skill_line(item: dict, underline: bool = False) -> str:
     """Format one skill line with icon emoji, character name and verdict."""
-    info = _char_info.get(item["sid"], ("", ""))
-    char_part = f" ({info[0]})" if info[0] else ""
+    char_name = _char_info.get(item["sid"], "")
+    char_part = f" ({char_name})" if char_name else ""
     icon = skills_module.skill_icon_emoji_for_id(item["sid"]) or "•"
     name = f"__**{item['name']}**__" if underline else f"**{item['name']}**"
     return f"{icon} {name}{char_part}: {item['verdict']}"
@@ -871,8 +871,8 @@ async def handle_parent_interaction(
         timeline_ids = cm_module.get_eligible_card_ids(cm_start_ts) if cm_start_ts else set()
         eligible_char_ids = _base_char_ids | timeline_ids
 
-    # char_names dict used by build_parent_skills (sid → character_name only)
-    char_names = {sid: info[0] for sid, info in _char_info.items()}
+    # char_names dict used by build_parent_skills (sid → character_name)
+    char_names = dict(_char_info)
 
     # Determine CM number for header display
     cm_num = cm_data["number"] if cm_data else "?"
