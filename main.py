@@ -7,7 +7,10 @@ import discord
 from discord import app_commands
 
 from bot import bot, token, logger
-from global_config import OWNER_USER_IDS, MAIN_OWNER_ID, MAIN_SERVER_ID, API_ENABLED, API_HOST, API_PORT
+from global_config import (
+    OWNER_USER_IDS, MAIN_OWNER_ID, MAIN_SERVER_ID,
+    API_ENABLED, API_HOST, API_PORT, TRAINING_SERVER_ID,
+)
 import uma_module
 import notification_module
 import circles_module
@@ -223,6 +226,11 @@ async def on_ready():
             logger.info(f"[Bot] API server enabled on http://{API_HOST}:{API_PORT}")
         except Exception as e:
             logger.error(f"[Bot] API server failed to start: {e}", exc_info=True)
+        if bot.get_guild(TRAINING_SERVER_ID) is None:
+            logger.warning(
+                f"[Bot] Not a member of the HorseACT server (TRAINING_SERVER_ID={TRAINING_SERVER_ID}) — "
+                "training dashboard/result channels won't be reachable until it's invited there."
+            )
     else:
         logger.info("[Bot] API server disabled (API_ENABLED=false)")
 

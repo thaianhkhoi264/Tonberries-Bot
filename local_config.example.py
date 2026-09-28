@@ -19,6 +19,8 @@ CIRCLE_ID         = ""  # uma.moe circle ID for Tonberries
 CIRCLE_CHANNEL_ID = 0   # Channel where circle stats are posted
 
 # HorseACT training-event API (horseact_network_probe integration)
+# Lives in its own separate Discord server, not MAIN_SERVER_ID.
+TRAINING_SERVER_ID               = 0  # Guild ID for the HorseACT server
 TRAINING_DASHBOARD_CHANNEL_ID    = 0  # Live per-user training status (ongoing / waiting for it to end)
 TRAINING_MANUAL_CHANNEL_ID       = 0  # Finished manual-training results (name, rating, stats, skills)
 TRAINING_INDEPENDENT_CHANNEL_ID  = 0  # Finished independent-training results (name, factors)
