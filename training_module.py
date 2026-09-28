@@ -12,23 +12,28 @@ autotrain_module.py's timer persistence:
   1. training_start saves {mode, cardId, scenarioId, ends_at} for that user_id.
   2. Independent mode schedules a 50-minute "safe to log in" notification;
      manual mode just waits for training_end.
-  3. training_end looks up the saved mode (falling back to the payload's own
-     mode if the bot missed training_start), builds the result embed, and
-     clears the saved state.
+  3. training_end always carries the full run shape (rank/stats/skills *and*
+     factors *and* supportCards) regardless of mode — `mode` only decides
+     which channel/embed style to use, resolved as: the saved state (if the
+     bot saw this run's training_start) > the payload's own `mode` (if
+     present — it's optional) > DM the user (see below). Builds the result
+     embed and clears the saved state.
 
 Three Discord channels:
   - TRAINING_DASHBOARD_CHANNEL_ID     — one live status message per user
   - TRAINING_MANUAL_CHANNEL_ID        — finished manual-training results
   - TRAINING_INDEPENDENT_CHANNEL_ID   — finished independent-training results
 
-Ambiguous training_end (no persisted training_start state — e.g. the run was
-started on a device that isn't running horseact_network_probe): rather than
-silently trusting the payload's own `mode` field with no corroborating
-context, this DMs the mapped user to ask manual / independent / cancel. The
-reply is plain text, matching autotrain_module.py's DM-command style. No
-timeout — single-user bot, the pending confirmation just waits. A fresh
-training_start OR another ambiguous training_end for the same user cancels
-(deletes) whatever confirmation is still pending, since it's now stale.
+Ambiguous training_end (no persisted training_start state *and* no `mode` on
+the payload itself — e.g. the run was started on a device that isn't running
+horseact_network_probe, or the plugin's own start-hook coverage missed this
+scenario class): DMs the mapped user to ask manual / independent / cancel.
+The run data itself is already complete and doesn't need to wait on this
+reply — only the embed-building step is held pending; `cancel` means "post
+nothing." Reply is plain text, matching autotrain_module.py's DM-command
+style. No timeout — single-user bot, the pending confirmation just waits. A
+fresh training_start OR another ambiguous training_end for the same user
+cancels (deletes) whatever confirmation is still pending, since it's stale.
 """
 
 import asyncio
@@ -489,9 +494,9 @@ async def _post_result(user_id: int, channel_id: int, embed: discord.Embed, card
 
 
 # ---------------------------------------------------------------------------
-# Ambiguous training_end — no persisted training_start state for this user.
-# DM them to ask which mode this actually was, rather than trusting the
-# payload's mode field with no corroborating context.
+# Ambiguous training_end — no persisted training_start state *and* no `mode`
+# on the payload itself, so there's genuinely nothing to resolve it from.
+# DM the user to ask which embed style this actually was.
 # ---------------------------------------------------------------------------
 
 async def _cancel_pending_confirmation(user_id: int) -> None:
@@ -598,19 +603,32 @@ async def handle_training_start(user_id: int, data: dict) -> None:
 
 
 async def handle_training_end(user_id: int, data: dict) -> str:
-    """Returns "posted" or "pending_confirmation"."""
+    """Returns "posted" or "pending_confirmation".
+
+    `mode` only decides which channel/embed style to use — training_end always
+    carries the full run shape (rank/stats/skills *and* factors *and*
+    supportCards) regardless of how it was played, so a wrong/missing mode
+    resolution is cosmetic, never a data-loss bug. Resolution order:
+      1. Persisted training_start state (authoritative — set at start time,
+         the same moment the timer/notification decision was made).
+      2. The payload's own `mode`, if present (it's optional now — the plugin
+         includes it only when its own local tracking knows it).
+      3. Neither: DM the user to pick manual/independent/cancel. The run data
+         is already complete and doesn't need to wait on that reply — only
+         the embed-building step is held pending.
+    """
     async with aiosqlite.connect(LOCAL_DB) as conn:
         active = await _get_active(conn, user_id)
 
-    if active is None:
-        # No corroborating training_start — ask the user rather than
-        # silently trusting the payload's own mode field.
+    if active is not None:
+        mode = active["mode"]
+    elif data.get("mode") in ("independent", "manual"):
+        mode = data["mode"]
+    else:
         await _request_confirmation(user_id, data)
         return "pending_confirmation"
 
-    # Prefer the stored mode (set at training_start time, consistent with the
-    # timer/notification decision already made) over the payload's own mode.
-    await _finish_training_end(user_id, active["mode"], data)
+    await _finish_training_end(user_id, mode, data)
     return "posted"
 
 

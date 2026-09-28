@@ -130,20 +130,19 @@ async def handle_training_end(request):
     except json.JSONDecodeError:
         return web.json_response({"success": False, "error": "Invalid JSON in request body"}, status=400)
 
-    error = _require_fields(data, ["mode", "timestamp", "cardId"])
+    # `mode` is no longer mode-branched required data — every training_end carries the
+    # full run shape (rank/stats/skills *and* factors *and* supportCards) regardless of
+    # how it was played. `mode` itself is optional (the plugin includes it only when its
+    # own local tracking knows it); training_module resolves it (persisted state, then
+    # payload mode, then DM confirmation) rather than this layer rejecting its absence.
+    error = _require_fields(
+        data, ["timestamp", "cardId", "rank", "rankScore", "fans", "stats", "skills", "factors", "supportCards"]
+    )
     if error:
         return web.json_response({"success": False, "error": error}, status=400)
 
-    mode = data["mode"]
-    if mode not in ("independent", "manual"):
+    if "mode" in data and data["mode"] not in ("independent", "manual"):
         return web.json_response({"success": False, "error": "'mode' must be 'independent' or 'manual'"}, status=400)
-
-    if mode == "independent":
-        error = _require_fields(data, ["factors"])
-    else:
-        error = _require_fields(data, ["rank", "rankScore", "fans", "stats", "skills"])
-    if error:
-        return web.json_response({"success": False, "error": error}, status=400)
 
     try:
         status = await training_module.handle_training_end(user_id, data)
