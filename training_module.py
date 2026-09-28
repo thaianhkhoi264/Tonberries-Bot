@@ -353,9 +353,11 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
-    rank = data.get("rank", "?")
+    rank = data.get("rank")
     rank_score = data.get("rankScore")
-    rank_value = f"{rank} ({rank_score:,} pts)" if isinstance(rank_score, int) else str(rank)
+    rank_emoji = decode.status_rank_emoji(rank) if isinstance(rank, int) else None
+    rank_display = rank_emoji or str(rank if rank is not None else "?")
+    rank_value = f"{rank_display} {rank_score:,} pts" if isinstance(rank_score, int) else rank_display
 
     embed = discord.Embed(title=title, colour=discord.Colour.green())
     filename = _thumbnail_filename(card_id)

@@ -27,6 +27,7 @@ from global_config import (
     TRAINING_CHARACTER_NAMES_JSON,
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
+    EMOJI_MAPPING_JSON,
 )
 
 # ---------------------------------------------------------------------------
@@ -84,6 +85,20 @@ def _character_names_table() -> dict:
 def _skill_names_table() -> dict:
     """{ skillId (str) -> [jp_name, en_name] | bare_name_string }"""
     return _load(SKILL_NAMES_JSON) or {}
+
+
+def _status_rank_table() -> dict:
+    """{ "00".."297" -> Discord emoji markup } — see tests/upload_misc_icon_emojis.py."""
+    return _load(EMOJI_MAPPING_JSON).get("status_rank", {})
+
+
+def status_rank_emoji(rank: int) -> Optional[str]:
+    """Discord emoji for a 1-indexed training rank (the payload's `rank` field).
+
+    The icon set is 0-indexed (key "00" = rank 1), hence rank - 1. Returns None
+    (not a placeholder) if unmapped, so callers can fall back to the plain number.
+    """
+    return _status_rank_table().get(f"{rank - 1:02d}")
 
 
 # ---------------------------------------------------------------------------
