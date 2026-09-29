@@ -832,6 +832,69 @@ async def handle_training_end(user_id: int, data: dict) -> str:
     return "posted"
 
 
+def _build_abandoned_embed(card_id: int | None, support_card_ids: list | None,
+                            friend_support_card_id: int | None) -> discord.Embed:
+    if card_id is None:
+        # No cardId anywhere — never saw this run's training_start, and the
+        # payload didn't have one either. Still notify, just without specifics.
+        return discord.Embed(title="A training run was glued", colour=discord.Colour.orange())
+
+    char = decode.character_display(card_id)
+    name = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+    embed = discord.Embed(title=f"The Training for {name} was glued", colour=discord.Colour.orange())
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
+    if support_card_ids or friend_support_card_id is not None:
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
+    return embed
+
+
+async def handle_training_abandoned(user_id: int, data: dict) -> None:
+    """A manual run ended early via the game's own Abandon option — no result
+    data exists for it (nothing was ever saved to the roster), so unlike
+    training_end there's nothing to post to a results channel. Per instruction
+    this skips the plan doc's suggested dashboard-channel notice and instead:
+    deletes the ongoing status message outright, and DMs the user directly
+    with an embed carrying the same thumbnail and (unstamped — there's no
+    limitBreakCount data for an abandoned run) support-card strip the
+    dashboard message itself was already showing.
+    """
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        active = await _get_active(conn, user_id)
+
+    # cardId is best-effort in the payload itself (may be absent) — fall back
+    # to whatever training_start persisted, same as training_end's mode fallback.
+    card_id = (active["card_id"] if active else None) or data.get("cardId")
+    support_card_ids = active["support_card_ids"] if active else None
+    friend_support_card_id = active["friend_support_card_id"] if active else None
+
+    embed = _build_abandoned_embed(card_id, support_card_ids, friend_support_card_id)
+    files = (
+        [f for f in (_thumbnail_file(card_id),
+                      _dashboard_strip_file(support_card_ids, friend_support_card_id)) if f is not None]
+        if card_id is not None else []
+    )
+
+    try:
+        user = await bot.fetch_user(user_id)
+        dm = await user.create_dm()
+        if files:
+            await dm.send(embed=embed, files=files)
+        else:
+            await dm.send(embed=embed)
+    except Exception as exc:
+        logger.error(f"[Training] Failed to DM abandoned-run notice to user {user_id}: {exc}")
+
+    _cancel_timer(user_id)
+    await _clear_dashboard(user_id)
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _clear_active(conn, user_id)
+        await conn.commit()
+
+    logger.info(f"[Training] training_abandoned for user {user_id}: cardId={card_id}")
+
+
 async def handle_confirmation_reply(message: discord.Message) -> bool:
     """Handle a DM reply of manual/independent/cancel to a pending confirmation.
 
