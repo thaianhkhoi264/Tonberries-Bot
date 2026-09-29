@@ -24,6 +24,7 @@ TRAINING_SERVER_ID               = 0  # Guild ID for the HorseACT server
 TRAINING_DASHBOARD_CHANNEL_ID    = 0  # Live per-user training status (ongoing / waiting for it to end)
 TRAINING_MANUAL_CHANNEL_ID       = 0  # Finished manual-training results (name, rating, stats, skills)
 TRAINING_INDEPENDENT_CHANNEL_ID  = 0  # Finished independent-training results (name, factors)
+TRAINING_ABANDONED_CHANNEL_ID    = 0  # Manual runs abandoned ("glued") mid-run
 
 # Maps api_keys.json descriptions -> Discord user IDs, same pattern as Gacha-Timer-Bot's
 # USER_DESCRIPTION_TO_ID. horseact_network_probe issues its own per-user API key; add an

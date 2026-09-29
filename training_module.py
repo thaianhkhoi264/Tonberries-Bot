@@ -19,10 +19,14 @@ autotrain_module.py's timer persistence:
      present — it's optional) > DM the user (see below). Builds the result
      embed and clears the saved state.
 
-Three Discord channels:
+Four Discord channels:
   - TRAINING_DASHBOARD_CHANNEL_ID     — one live status message per user
   - TRAINING_MANUAL_CHANNEL_ID        — finished manual-training results
   - TRAINING_INDEPENDENT_CHANNEL_ID   — finished independent-training results
+  - TRAINING_ABANDONED_CHANNEL_ID     — manual runs abandoned ("glued") mid-run
+
+All four are shared across every user/API key, so every embed posted to them
+carries an "Owner" field (`<@user_id>`) to tell runs apart.
 
 Ambiguous training_end (no persisted training_start state *and* no `mode` on
 the payload itself — e.g. the run was started on a device that isn't running
@@ -51,6 +55,7 @@ from global_config import (
     TRAINING_DASHBOARD_CHANNEL_ID,
     TRAINING_MANUAL_CHANNEL_ID,
     TRAINING_INDEPENDENT_CHANNEL_ID,
+    TRAINING_ABANDONED_CHANNEL_ID,
 )
 import skills_module
 import training_decode as decode
@@ -356,7 +361,7 @@ def _dashboard_strip_file(support_card_ids: list | None, friend_support_card_id:
 # Dashboard channel — one live status message per user
 # ---------------------------------------------------------------------------
 
-def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: bool,
+def _dashboard_embed(user_id: int, mode: str, card_id: int, ends_at: datetime | None, ready: bool,
                       support_card_ids: list | None = None, friend_support_card_id: int | None = None) -> discord.Embed:
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
@@ -372,6 +377,7 @@ def _dashboard_embed(mode: str, card_id: int, ends_at: datetime | None, ready: b
         colour = discord.Colour.blurple()
 
     embed = discord.Embed(title=title, description=status, colour=colour)
+    embed.add_field(name="Owner", value=f"<@{user_id}>")
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
@@ -389,7 +395,7 @@ async def _update_dashboard(user_id: int, mode: str, card_id: int, ends_at: date
         logger.warning("[Training] Dashboard channel not found/configured")
         return None
 
-    embed = _dashboard_embed(mode, card_id, ends_at, ready, support_card_ids, friend_support_card_id)
+    embed = _dashboard_embed(user_id, mode, card_id, ends_at, ready, support_card_ids, friend_support_card_id)
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         existing = await _get_active(conn, user_id)
@@ -573,11 +579,12 @@ def _add_rank_fans_stats(embed: discord.Embed, data: dict) -> None:
         embed.add_field(name="Stats", value=stat_line, inline=False)
 
 
-def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
+def _build_manual_embed(user_id: int, card_id: int, data: dict) -> discord.Embed:
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
     embed = discord.Embed(title=title, colour=discord.Colour.green())
+    embed.add_field(name="Owner", value=f"<@{user_id}>")
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
@@ -609,11 +616,12 @@ def _build_manual_embed(card_id: int, data: dict) -> discord.Embed:
 _SPARK_TYPE_PRIORITY = {0: 0, 1: 1, 5: 2}
 
 
-def _build_independent_embed(card_id: int, data: dict) -> discord.Embed:
+def _build_independent_embed(user_id: int, card_id: int, data: dict) -> discord.Embed:
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
     embed = discord.Embed(title=title, colour=discord.Colour.purple())
+    embed.add_field(name="Owner", value=f"<@{user_id}>")
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
@@ -733,10 +741,10 @@ async def _finish_training_end(user_id: int, mode: str, data: dict) -> None:
     card_id = data["cardId"]
 
     if mode == "independent":
-        embed = _build_independent_embed(card_id, data)
+        embed = _build_independent_embed(user_id, card_id, data)
         channel_id = TRAINING_INDEPENDENT_CHANNEL_ID
     else:
-        embed = _build_manual_embed(card_id, data)
+        embed = _build_manual_embed(user_id, card_id, data)
         channel_id = TRAINING_MANUAL_CHANNEL_ID
 
     await _post_result(user_id, channel_id, embed, card_id, data)
@@ -832,16 +840,19 @@ async def handle_training_end(user_id: int, data: dict) -> str:
     return "posted"
 
 
-def _build_abandoned_embed(card_id: int | None, support_card_ids: list | None,
+def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: list | None,
                             friend_support_card_id: int | None) -> discord.Embed:
     if card_id is None:
         # No cardId anywhere — never saw this run's training_start, and the
         # payload didn't have one either. Still notify, just without specifics.
-        return discord.Embed(title="A training run was glued", colour=discord.Colour.orange())
+        embed = discord.Embed(title="A training run was glued", colour=discord.Colour.orange())
+        embed.add_field(name="Owner", value=f"<@{user_id}>")
+        return embed
 
     char = decode.character_display(card_id)
     name = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
     embed = discord.Embed(title=f"The Training for {name} was glued", colour=discord.Colour.orange())
+    embed.add_field(name="Owner", value=f"<@{user_id}>")
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
@@ -855,10 +866,12 @@ async def handle_training_abandoned(user_id: int, data: dict) -> None:
     data exists for it (nothing was ever saved to the roster), so unlike
     training_end there's nothing to post to a results channel. Per instruction
     this skips the plan doc's suggested dashboard-channel notice and instead:
-    deletes the ongoing status message outright, and DMs the user directly
-    with an embed carrying the same thumbnail and (unstamped — there's no
-    limitBreakCount data for an abandoned run) support-card strip the
-    dashboard message itself was already showing.
+    deletes the ongoing status message outright, and posts an embed to the
+    shared TRAINING_ABANDONED_CHANNEL_ID (tagged with an Owner field, since
+    the channel is shared across every user/API key) carrying the same
+    thumbnail and (unstamped — there's no limitBreakCount data for an
+    abandoned run) support-card strip the dashboard message itself was
+    already showing.
     """
     async with aiosqlite.connect(LOCAL_DB) as conn:
         active = await _get_active(conn, user_id)
@@ -869,22 +882,24 @@ async def handle_training_abandoned(user_id: int, data: dict) -> None:
     support_card_ids = active["support_card_ids"] if active else None
     friend_support_card_id = active["friend_support_card_id"] if active else None
 
-    embed = _build_abandoned_embed(card_id, support_card_ids, friend_support_card_id)
+    embed = _build_abandoned_embed(user_id, card_id, support_card_ids, friend_support_card_id)
     files = (
         [f for f in (_thumbnail_file(card_id),
                       _dashboard_strip_file(support_card_ids, friend_support_card_id)) if f is not None]
         if card_id is not None else []
     )
 
-    try:
-        user = await bot.fetch_user(user_id)
-        dm = await user.create_dm()
-        if files:
-            await dm.send(embed=embed, files=files)
-        else:
-            await dm.send(embed=embed)
-    except Exception as exc:
-        logger.error(f"[Training] Failed to DM abandoned-run notice to user {user_id}: {exc}")
+    channel = bot.get_channel(TRAINING_ABANDONED_CHANNEL_ID)
+    if channel is None:
+        logger.warning("[Training] Abandoned-runs channel not found/configured")
+    else:
+        try:
+            if files:
+                await channel.send(embed=embed, files=files)
+            else:
+                await channel.send(embed=embed)
+        except Exception as exc:
+            logger.error(f"[Training] Failed to post abandoned-run notice for user {user_id}: {exc}")
 
     _cancel_timer(user_id)
     await _clear_dashboard(user_id)
