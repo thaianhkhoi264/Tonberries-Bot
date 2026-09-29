@@ -35,9 +35,29 @@ _PADDING = 8 * _SCALE
 _STROKE_WIDTH = 2 * _SCALE * _TEXT_SCALE
 
 
+# Lowercased filename -> actual filename, cached lazily. Most of uma-tools'
+# ~1000 support_card_s_*.png files are consistently lowercase, but a handful
+# aren't (e.g. "Support_card_s_30024.png", capital S in "Support") — case
+# insensitive lookup handles those (and any other latent ones) without
+# hardcoding exceptions per ID.
+_support_icon_index: dict[str, str] | None = None
+
+
+def _support_icon_filename_index() -> dict[str, str]:
+    global _support_icon_index
+    if _support_icon_index is None:
+        _support_icon_index = {}
+        if os.path.isdir(UMA_TOOLS_SUPPORT_ICON_DIR):
+            for fn in os.listdir(UMA_TOOLS_SUPPORT_ICON_DIR):
+                _support_icon_index[fn.lower()] = fn
+    return _support_icon_index
+
+
 def _card_image(support_card_id: int) -> Image.Image:
-    path = os.path.join(UMA_TOOLS_SUPPORT_ICON_DIR, f"support_card_s_{support_card_id}.png")
-    if os.path.exists(path):
+    expected = f"support_card_s_{support_card_id}.png"
+    actual = _support_icon_filename_index().get(expected.lower())
+    if actual:
+        path = os.path.join(UMA_TOOLS_SUPPORT_ICON_DIR, actual)
         img = Image.open(path).convert("RGBA")
         return img.resize((_CARD_SIZE, _CARD_SIZE), Image.LANCZOS)
     # Missing icon — a plain placeholder rather than erroring, same
