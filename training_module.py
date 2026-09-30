@@ -44,6 +44,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
@@ -94,11 +95,29 @@ async def init_db() -> None:
         # Migrate pre-existing installs (CREATE TABLE IF NOT EXISTS above is a
         # no-op once the table already exists, so add the new columns here).
         for column, coltype in (("support_card_ids", "TEXT"), ("friend_support_card_id", "INTEGER"),
-                                 ("ready_notification_msg_id", "INTEGER")):
+                                 ("ready_notification_msg_id", "INTEGER"),
+                                 ("single_mode_chara_id", "INTEGER")):
             try:
                 await conn.execute(f"ALTER TABLE active_training ADD COLUMN {column} {coltype}")
             except Exception:
                 pass  # already has the column
+        # Chain events accumulated turn over turn (training_progress never sends a full
+        # history, only one entry per turn) — keyed by single_mode_chara_id, not user_id
+        # alone, same run-separation reasoning as active_training. UNIQUE on (user_id,
+        # single_mode_chara_id, turn) so a retried training_progress POST for a turn
+        # already recorded can't double-count that chain event (plan doc decision #6).
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS chain_events (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id             INTEGER NOT NULL,
+                single_mode_chara_id INTEGER NOT NULL,
+                turn                INTEGER NOT NULL,
+                story_id            INTEGER NOT NULL,
+                support_card_id     INTEGER NOT NULL,
+                seen_at             TEXT NOT NULL,
+                UNIQUE(user_id, single_mode_chara_id, turn)
+            )
+        """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS training_result_posts (
                 user_id    INTEGER PRIMARY KEY,
@@ -128,7 +147,7 @@ async def init_db() -> None:
 async def _get_active(conn, user_id: int) -> dict | None:
     async with conn.execute(
         "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id, "
-        "support_card_ids, friend_support_card_id, ready_notification_msg_id "
+        "support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id "
         "FROM active_training WHERE user_id=?",
         (user_id,),
     ) as cur:
@@ -141,24 +160,61 @@ async def _get_active(conn, user_id: int) -> dict | None:
         "support_card_ids": json.loads(row[6]) if row[6] else None,
         "friend_support_card_id": row[7],
         "ready_notification_msg_id": row[8],
+        "single_mode_chara_id": row[9],
     }
 
 
 async def _save_active(conn, user_id: int, mode: str, card_id: int, scenario_id: int | None,
                         started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None,
-                        support_card_ids: list | None = None, friend_support_card_id: int | None = None) -> None:
+                        support_card_ids: list | None = None, friend_support_card_id: int | None = None,
+                        single_mode_chara_id: int | None = None) -> None:
     # ready_notification_msg_id always starts NULL — it's only ever set later,
     # once the independent-mode timer actually fires (see _set_ready_notification).
     await conn.execute(
         """INSERT OR REPLACE INTO active_training
            (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,
-            support_card_ids, friend_support_card_id, ready_notification_msg_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
+            support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
         (user_id, mode, card_id, scenario_id, started_at.isoformat(),
          ends_at.isoformat() if ends_at else None, dashboard_msg_id,
          json.dumps(support_card_ids) if support_card_ids is not None else None,
-         friend_support_card_id),
+         friend_support_card_id, single_mode_chara_id),
     )
+
+
+async def _set_single_mode_chara_id(conn, user_id: int, single_mode_chara_id: int) -> None:
+    await conn.execute(
+        "UPDATE active_training SET single_mode_chara_id=? WHERE user_id=?",
+        (single_mode_chara_id, user_id),
+    )
+
+
+async def _add_chain_event(conn, user_id: int, single_mode_chara_id: int, turn: int,
+                            story_id: int, support_card_id: int) -> None:
+    # INSERT OR IGNORE: the UNIQUE(user_id, single_mode_chara_id, turn) constraint
+    # means a retried training_progress POST for a turn already recorded is a no-op
+    # here, not a duplicate row (plan doc decision #6).
+    await conn.execute(
+        """INSERT OR IGNORE INTO chain_events
+           (user_id, single_mode_chara_id, turn, story_id, support_card_id, seen_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (user_id, single_mode_chara_id, turn, story_id, support_card_id,
+         datetime.now(timezone.utc).isoformat()),
+    )
+
+
+async def _get_chain_events(conn, user_id: int, single_mode_chara_id: int) -> list[dict]:
+    async with conn.execute(
+        "SELECT turn, story_id, support_card_id FROM chain_events "
+        "WHERE user_id=? AND single_mode_chara_id=? ORDER BY turn",
+        (user_id, single_mode_chara_id),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [{"turn": r[0], "story_id": r[1], "support_card_id": r[2]} for r in rows]
+
+
+async def _clear_chain_events(conn, user_id: int) -> None:
+    await conn.execute("DELETE FROM chain_events WHERE user_id=?", (user_id,))
 
 
 async def _set_ready_notification(conn, user_id: int, message_id: int) -> None:
@@ -557,7 +613,11 @@ def _add_chunked_field(embed: discord.Embed, name: str, lines: list[str], inline
         chunks.append(current)
 
     for i, chunk in enumerate(chunks):
-        field_name = name if len(chunks) == 1 else f"{name} ({i + 1}/{len(chunks)})"
+        # Only the first chunk keeps the real title — later ones use a zero-width
+        # space (Discord requires a non-empty field name, but this renders blank),
+        # so a multi-chunk field reads as one seamless block instead of repeating
+        # "Name (i/N)" headers down the embed.
+        field_name = name if i == 0 else "​"
         embed.add_field(name=field_name, value=chunk, inline=inline)
 
 
@@ -753,6 +813,7 @@ async def _finish_training_end(user_id: int, mode: str, data: dict) -> None:
     await _clear_dashboard(user_id)
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _clear_active(conn, user_id)
+        await _clear_chain_events(conn, user_id)
         await conn.commit()
 
     logger.info(f"[Training] training_end for user {user_id}: mode={mode}, cardId={card_id}")
@@ -861,27 +922,14 @@ def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: 
     return embed
 
 
-async def handle_training_abandoned(user_id: int, data: dict) -> None:
-    """A manual run ended early via the game's own Abandon option — no result
-    data exists for it (nothing was ever saved to the roster), so unlike
-    training_end there's nothing to post to a results channel. Per instruction
-    this skips the plan doc's suggested dashboard-channel notice and instead:
-    deletes the ongoing status message outright, and posts an embed to the
-    shared TRAINING_ABANDONED_CHANNEL_ID (tagged with an Owner field, since
-    the channel is shared across every user/API key) carrying the same
-    thumbnail and (unstamped — there's no limitBreakCount data for an
-    abandoned run) support-card strip the dashboard message itself was
-    already showing.
-    """
-    async with aiosqlite.connect(LOCAL_DB) as conn:
-        active = await _get_active(conn, user_id)
-
-    # cardId is best-effort in the payload itself (may be absent) — fall back
-    # to whatever training_start persisted, same as training_end's mode fallback.
-    card_id = (active["card_id"] if active else None) or data.get("cardId")
-    support_card_ids = active["support_card_ids"] if active else None
-    friend_support_card_id = active["friend_support_card_id"] if active else None
-
+async def _glue_active_run(user_id: int, card_id: int | None, support_card_ids: list | None,
+                            friend_support_card_id: int | None, reason: str) -> None:
+    """Shared "this run never got a real ending" path: posts the abandoned-runs
+    notice, deletes the dashboard card, clears active state. Used both by a real
+    training_abandoned POST and by handle_training_progress when a new
+    singleModeCharaId shows up while an old run is still active (see the plan
+    doc's "singleModeCharaId mismatch handling" decision — that case reuses this
+    exact pipeline rather than silently overwriting the stale run)."""
     embed = _build_abandoned_embed(user_id, card_id, support_card_ids, friend_support_card_id)
     files = (
         [f for f in (_thumbnail_file(card_id),
@@ -905,9 +953,34 @@ async def handle_training_abandoned(user_id: int, data: dict) -> None:
     await _clear_dashboard(user_id)
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _clear_active(conn, user_id)
+        await _clear_chain_events(conn, user_id)
         await conn.commit()
 
-    logger.info(f"[Training] training_abandoned for user {user_id}: cardId={card_id}")
+    logger.info(f"[Training] glued active run for user {user_id}: cardId={card_id}, reason={reason}")
+
+
+async def handle_training_abandoned(user_id: int, data: dict) -> None:
+    """A manual run ended early via the game's own Abandon option — no result
+    data exists for it (nothing was ever saved to the roster), so unlike
+    training_end there's nothing to post to a results channel. Per instruction
+    this skips the plan doc's suggested dashboard-channel notice and instead:
+    deletes the ongoing status message outright, and posts an embed to the
+    shared TRAINING_ABANDONED_CHANNEL_ID (tagged with an Owner field, since
+    the channel is shared across every user/API key) carrying the same
+    thumbnail and (unstamped — there's no limitBreakCount data for an
+    abandoned run) support-card strip the dashboard message itself was
+    already showing.
+    """
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        active = await _get_active(conn, user_id)
+
+    # cardId is best-effort in the payload itself (may be absent) — fall back
+    # to whatever training_start persisted, same as training_end's mode fallback.
+    card_id = (active["card_id"] if active else None) or data.get("cardId")
+    support_card_ids = active["support_card_ids"] if active else None
+    friend_support_card_id = active["friend_support_card_id"] if active else None
+
+    await _glue_active_run(user_id, card_id, support_card_ids, friend_support_card_id, reason="training_abandoned")
 
 
 async def handle_confirmation_reply(message: discord.Message) -> bool:
@@ -936,3 +1009,359 @@ async def handle_confirmation_reply(message: discord.Message) -> bool:
     else:
         await message.channel.send("Reply `manual`, `independent`, or `cancel` for the training_end I asked about.")
         return True
+
+
+# ---------------------------------------------------------------------------
+# Training progress (live dashboard view) — Event 4 in the plan doc.
+#
+# Unlike training_start/training_end/training_abandoned (one-shot posts),
+# training_progress fires once per turn and just edits the same dashboard
+# message in place with the latest state — see "Handling training_progress"
+# in the plan doc. Two embeds are sent together on one message: the main
+# status card, and (Live scenario only, when the payload has a `liveShow`
+# block) a separate "Live Show" embed for song/concert bookkeeping.
+# ---------------------------------------------------------------------------
+
+# Song catalog for the Live Show embed: {liveId: (title, statBonus, concertBonus, cost)}.
+# No sync source exists for this anywhere (not uma.moe/GitHub-hosted like the
+# factor/skill/character tables), so it's a hardcoded table here, same convention as
+# training_decode.py's _STATUS_EFFECT_NAMES — resolved this session from the
+# daftuyda.moe token planner cross-checked against master.mdb, not guessed. Update by
+# hand if new Grand Live songs ship. 1006/1036 are free/auto-granted (never purchased
+# with tokens), everything else is bought with performance-point tokens.
+_SONG_CATALOG: dict[int, tuple[str, str, str | None, dict[str, int]]] = {
+    1006: ("Make Debut!", "All Performance Points +10", None, {}),
+    1036: ("Girls' Legend U", "All Attributes +10", "Friendship Bonus +10%", {}),
+    1040: ("Here Comes Our Time", "Power +22", "Friendship Bonus +5%", {"vo": 32, "me": 12}),
+    1003: ("Run n' Run!", "Skill Pts +22", "Friendship Bonus +5%", {"da": 14, "vi": 16, "me": 14}),
+    1044: ("Full Speed Ahead! Umadol Power☆", "Speed +22", "Friendship Bonus +5%", {"da": 32, "vi": 12}),
+    1057: ("Zero Is Where the Center Stands!", "Training Speed Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}),
+    1038: ("Believe in Miracles!", "Training Wit Gain +1", "Speciality Priority Up +5", {"pa": 21, "me": 21}),
+    1042: ("Go This Way", "Training Power Gain +1", "Support Chain Event Frequency +1", {"vo": 21, "me": 21}),
+    1047: ("Ring Ring Diary", "Training Stamina Gain +1", "Support Chain Event Frequency +1", {"pa": 21, "vi": 21}),
+    1046: ("Getaway! Fallin' Love", "Training Guts Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}),
+    1032: ("Run for Our Dream!", "Skill Point Bonus +2", "Speciality Priority Up +5", {"pa": 21, "vi": 21}),
+    1023: ("Our Blue Bird Days", "Training Speed Gain +2", "Speciality Priority Up +5", {"da": 21, "vi": 42}),
+    1011: ("Hey, Guess What!", "Training Guts Gain +2", "Speciality Priority Up +5", {"da": 42, "vi": 21}),
+    1012: ("Grow Up and Shine!", "Skill Point Bonus +3", "Support Chain Event Frequency +1", {"da": 21, "vo": 21, "me": 21}),
+    1045: ("Seven Colors Scenery", "Training Power Gain +2", "Speciality Priority Up +5", {"vo": 21, "me": 42}),
+    1043: ("Sunbeam Cheer", "Training Wit Gain +2", "Support Chain Event Frequency +1", {"pa": 42, "me": 21}),
+    1034: ("Hoppity Sunny Days♪", "Training Stamina Gain +2", "Speciality Priority Up +5", {"pa": 42, "vo": 21}),
+    1024: ("Precious Treasure Box", "Speed +26", "Friendship Bonus +10%", {"da": 42, "vi": 26}),
+    1020: ("Fanfare for the Future!", "Guts +26", "Friendship Bonus +10%", {"da": 26, "vi": 42}),
+    1039: ("Present March♪", "Power +22", "Friendship Bonus +5%", {"vo": 22, "me": 22}),
+    1041: ("Dream Sky", "Wit +22", "Friendship Bonus +5%", {"pa": 22, "me": 22}),
+    1021: ("The World's at Our Whim", "Stamina +22", "Friendship Bonus +5%", {"pa": 32, "vo": 12}),
+    1014: ("Sky-Blue Spring", "Guts +22", "Friendship Bonus +5%", {"da": 12, "vi": 32}),
+}
+_FREE_SONG_IDS = {1006, 1036, 1029}  # auto-granted, never shown as "not yet learned"
+_TOKEN_TO_PERFORMANCE_TYPE = {"da": 1, "pa": 2, "vo": 3, "vi": 4, "me": 5}
+
+# training_progress's `facilities[].commandId` 601-605 — user-confirmed display names
+# (see plan doc). _FACILITY_RAINBOW_TYPE spells "Wit" (no "s") to match
+# support_card_type()'s own output exactly, for the rainbow-count comparison below.
+_FACILITY_DISPLAY_NAMES = {601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wits"}
+_FACILITY_RAINBOW_TYPE = {601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wit"}
+
+
+def _deck_positions(active: dict | None) -> list | None:
+    """The 6 supportCardIds in bond/facility-partner position order (1-5 regular,
+    6 friend), or None if this run's deck was never captured (training_progress
+    arrived without ever seeing this run's training_start — see handle_training_progress)."""
+    if not active or not active.get("support_card_ids"):
+        return None
+    positions = list(active["support_card_ids"])
+    if active.get("friend_support_card_id") is not None:
+        positions.append(active["friend_support_card_id"])
+    return positions if len(positions) == 6 else None
+
+
+def _resolve_partner(target_id: int, deck_positions: list | None) -> str:
+    name = decode.bond_partner_name(target_id, deck_positions=deck_positions)
+    if name:
+        return name
+    if 1 <= target_id <= 6:
+        return f"Deck position {target_id}"  # deck unknown for this run — see _deck_positions
+    return f"Unknown (id {target_id})"
+
+
+def _resolve_partner_styled(target_id: int, rainbow_type: str | None, deck_positions: list | None) -> str:
+    """Same as _resolve_partner, bold+underlined only when it's a support card (deck
+    position 1-6) actually contributing to a rainbow at this facility."""
+    label = _resolve_partner(target_id, deck_positions)
+    if deck_positions and 1 <= target_id <= 6 and rainbow_type:
+        cid = deck_positions[target_id - 1]
+        if decode.support_card_type(cid) == rainbow_type:
+            return f"**__{label}__**"
+    return label
+
+
+def _energy_bar(vital: int, max_vital: int) -> str:
+    """~1 block per 10 energy ("Vital" in the payload, "Energy" in the user-facing
+    embed — same field, just the display name the user settled on)."""
+    if max_vital <= 0:
+        return f"{vital}/{max_vital}"
+    total_blocks = max(round(max_vital / 10), 1)
+    filled_blocks = min(max(round(vital / 10), 0), total_blocks)
+    return "▰" * filled_blocks + "▱" * (total_blocks - filled_blocks) + f" {vital}/{max_vital}"
+
+
+def _bonds_text(bonds: list[dict], deck_positions: list | None) -> str | None:
+    """Merged deck + other-partner bonds, blank line between the two groups. A
+    non-deck partner with 0 bond is dropped (per explicit instruction) — deck
+    positions always show regardless of value."""
+    deck_lines, other_lines = [], []
+    for b in bonds:
+        tid = b["targetId"]
+        if 1 <= tid <= 6:
+            deck_lines.append(f"{_resolve_partner(tid, deck_positions)}: {b['evaluation']}")
+        elif b.get("evaluation", 0) > 0:
+            other_lines.append(f"{_resolve_partner(tid, deck_positions)}: {b['evaluation']}")
+    if not deck_lines and not other_lines:
+        return None
+    return "\n".join(deck_lines) + ("\n\n" + "\n".join(other_lines) if other_lines else "")
+
+
+def _status_effects_text(status_effect_ids: list[int]) -> str | None:
+    if not status_effect_ids:
+        return None
+    return ", ".join(decode.status_effect_name(i) or f"Unknown ({i})" for i in status_effect_ids)
+
+
+def _training_lines(facilities: list[dict], deck_positions: list | None) -> list[str]:
+    lines = []
+    for f in facilities:
+        cmd = f["commandId"]
+        fname = _FACILITY_DISPLAY_NAMES.get(cmd, f"Facility {cmd}")
+        rainbow_type = _FACILITY_RAINBOW_TYPE.get(cmd)
+        partner_ids = f.get("partnerTargetIds", f.get("supportCardIds", []))  # tolerate the old field name too
+
+        rainbow_count = 0
+        if deck_positions and rainbow_type:
+            for pid in partner_ids:
+                if 1 <= pid <= 6:
+                    cid = deck_positions[pid - 1]
+                    if decode.support_card_type(cid) == rainbow_type:
+                        rainbow_count += 1
+
+        if rainbow_count:
+            facility_emoji = decode.stat_rainbow_emoji(rainbow_type.lower()) if rainbow_type else None
+            facility_emoji = facility_emoji or decode.stat_emoji(fname.lower()) or ""
+            rainbow_suffix = f" ({rainbow_count}x Rainbows)"
+        else:
+            facility_emoji = decode.stat_emoji(fname.lower()) or ""
+            rainbow_suffix = ""
+
+        perf = ", ".join(
+            f"{'+' if g['value'] >= 0 else ''}{g['value']} "
+            f"{decode.performance_type_emoji(g['performanceType']) or decode.performance_type_display(g['performanceType'])}"
+            for g in f.get("performanceGains", [])
+        )
+        partners = ", ".join(_resolve_partner_styled(pid, rainbow_type, deck_positions) for pid in partner_ids)
+        line = f"{facility_emoji} **{fname}** Lv {f['level']}{rainbow_suffix}"
+        if perf:
+            line += f" — {perf}"
+        if partners:
+            line += f"\nw/ {partners}"
+        lines.append(line)
+    return lines
+
+
+def _token_cost_text(cost: dict[str, int]) -> str:
+    parts = []
+    for k, v in cost.items():
+        emoji = decode.performance_type_emoji(_TOKEN_TO_PERFORMANCE_TYPE[k])
+        parts.append(f"{emoji or k} {v}")
+    return ", ".join(parts)
+
+
+def _live_show_summary_lines(live_show: dict) -> list[str]:
+    permanent_line = ", ".join(
+        f"{'+' if b['effectValue'] >= 0 else ''}{b['effectValue']} {decode.target_type_display(b['targetType'])}"
+        for b in live_show.get("trainingBonuses", [])
+    ) or "None yet"
+
+    learned_ids = set(live_show.get("masterLiveIds", []))
+    concert_totals: dict[str, int] = {}
+    for lid in learned_ids:
+        entry = _SONG_CATALOG.get(lid)
+        if entry and entry[2]:
+            concert_totals[entry[2]] = concert_totals.get(entry[2], 0) + 1
+
+    # Same-type concert bonuses stack additively (the game's own "effects added
+    # together" rule — see the plan doc's liveShow section).
+    aggregated: dict[tuple[str, str], int] = {}
+    for text, count in concert_totals.items():
+        m = re.match(r"^(.*?)([+-]?\d+)(%?)$", text)
+        if m:
+            base, num, pct = m.group(1).strip(), int(m.group(2)), m.group(3)
+            aggregated[(base, pct)] = aggregated.get((base, pct), 0) + num * count
+        else:
+            aggregated[(text, "")] = aggregated.get((text, ""), 0) + count
+    concert_line = ", ".join(f"{base} +{total}{pct}" for (base, pct), total in aggregated.items()) or "None yet"
+
+    return [f"**Permanent Bonus:** {permanent_line}", f"**Concert Bonus:** {concert_line}"]
+
+
+def _live_show_not_learned_blocks(live_show: dict) -> list[str]:
+    learned_ids = set(live_show.get("masterLiveIds", []))
+    blocks = []
+    for lid, (title, stat_bonus, concert_bonus, cost) in _SONG_CATALOG.items():
+        if lid in learned_ids or lid in _FREE_SONG_IDS:
+            continue
+        effect = f"{stat_bonus} / {concert_bonus}" if concert_bonus else stat_bonus
+        blocks.append(f"**{title}**\n{effect}\n{_token_cost_text(cost)}")
+    return blocks
+
+
+def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None) -> discord.Embed:
+    card_id = data["cardId"]
+    char = decode.character_display(card_id)
+    title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
+
+    turn_info = decode.turn_to_date(data["turn"])
+    date_label = turn_info["label"] if turn_info else "Date unconfirmed"
+    mood_display = decode.mood_emojis(data["mood"]) if "mood" in data else None
+    description = f"{date_label} — Manual Training ongoing\n{_energy_bar(data['vital'], data['maxVital'])}"
+    if mood_display:
+        description += f" {mood_display}"
+
+    embed = discord.Embed(title=title, description=description, colour=discord.Colour.blurple())
+
+    stats = data.get("stats") or {}
+    if stats:
+        stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in stats.items())
+        embed.add_field(name="Stats", value=stat_line, inline=False)
+
+    embed.add_field(name="Skill Points / Fans", value=f"{data.get('skillPoint', 0)} / {data.get('fans', 0):,}", inline=True)
+    embed.add_field(name="Owner", value=f"<@{user_id}>", inline=True)
+
+    bonds_text = _bonds_text(data.get("bonds", []), deck_positions)
+    if bonds_text:
+        _add_chunked_field(embed, "Bonds", bonds_text.split("\n"))
+
+    status_text = _status_effects_text(data.get("statusEffects", []))
+    if status_text:
+        _add_chunked_field(embed, "Status Effects", [status_text])
+
+    training_lines = _training_lines(data.get("facilities", []), deck_positions)
+    if training_lines:
+        _add_chunked_field(embed, "Training", training_lines)
+
+    filename = _thumbnail_filename(card_id)
+    if filename:
+        embed.set_thumbnail(url=f"attachment://{filename}")
+    if deck_positions:
+        embed.set_image(url=f"attachment://{_SUPPORT_STRIP_FILENAME}")
+
+    return embed
+
+
+def _build_live_show_embed(data: dict) -> discord.Embed | None:
+    live_show = data.get("liveShow")
+    if not live_show:
+        return None
+    embed = discord.Embed(title="Live Show", colour=discord.Colour.gold())
+    _add_chunked_field(embed, "Bonuses", _live_show_summary_lines(live_show))
+    not_learned = _live_show_not_learned_blocks(live_show)
+    if not_learned:
+        _add_chunked_field(embed, "Not Yet Learned", not_learned)
+    return embed
+
+
+# Per-user throttle on actual Discord edits — training_progress can fire every few
+# seconds on a fast turn, and this bot has already hit a 429 once on this exact
+# message-edit endpoint (see plan doc decision #7). State is always persisted on
+# every POST regardless; only the visible Discord edit is skipped when too soon
+# after the last one, so the next edit that does go through is still fully caught up.
+_PROGRESS_EDIT_MIN_INTERVAL = timedelta(seconds=3)
+_last_progress_edit: dict[int, datetime] = {}
+
+
+async def _update_progress_dashboard(user_id: int, data: dict, deck_positions: list | None,
+                                      dashboard_msg_id: int | None) -> int | None:
+    """Edits (or creates, if missing) this user's dashboard message with the live
+    training_progress view. Returns the message id. Throttled per _PROGRESS_EDIT_MIN_INTERVAL
+    — returns the existing msg_id unchanged without editing if called too soon."""
+    now = datetime.now(timezone.utc)
+    last = _last_progress_edit.get(user_id)
+    if dashboard_msg_id and last and now - last < _PROGRESS_EDIT_MIN_INTERVAL:
+        return dashboard_msg_id
+
+    channel = bot.get_channel(TRAINING_DASHBOARD_CHANNEL_ID)
+    if channel is None:
+        logger.warning("[Training] Dashboard channel not found/configured")
+        return dashboard_msg_id
+
+    embed = _build_progress_embed(user_id, data, deck_positions)
+    live_embed = _build_live_show_embed(data)
+    embeds = [embed, live_embed] if live_embed else [embed]
+
+    card_id = data["cardId"]
+    files = [f for f in (
+        _thumbnail_file(card_id),
+        _dashboard_strip_file(deck_positions[:5] if deck_positions else None,
+                               deck_positions[5] if deck_positions and len(deck_positions) == 6 else None),
+    ) if f is not None]
+
+    if dashboard_msg_id:
+        try:
+            msg = await channel.fetch_message(dashboard_msg_id)
+            await msg.edit(embeds=embeds, attachments=files)
+            _last_progress_edit[user_id] = now
+            return dashboard_msg_id
+        except discord.NotFound:
+            pass  # fall through and post a new one
+        except Exception as exc:
+            logger.error(f"[Training] Failed to edit progress dashboard for {user_id}: {exc}")
+            return dashboard_msg_id
+
+    try:
+        msg = await (channel.send(embeds=embeds, files=files) if files else channel.send(embeds=embeds))
+        _last_progress_edit[user_id] = now
+        return msg.id
+    except Exception as exc:
+        logger.error(f"[Training] Failed to send progress dashboard for {user_id}: {exc}")
+        return None
+
+
+async def handle_training_progress(user_id: int, data: dict) -> None:
+    """One POST per turn during a manual run — see "Handling training_progress" in
+    the plan doc. Live-editing surface, not a one-shot post: every call just renders
+    the latest state onto the same dashboard message (throttled, see
+    _update_progress_dashboard), no duplicate-check needed."""
+    single_mode_chara_id = data["singleModeCharaId"]
+    card_id = data["cardId"]
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        active = await _get_active(conn, user_id)
+
+    if active is not None and active["single_mode_chara_id"] is not None \
+            and active["single_mode_chara_id"] != single_mode_chara_id:
+        # A different run is already active — the old one never got a real ending.
+        # Glue it (same pipeline as a real training_abandoned) before starting fresh.
+        await _glue_active_run(user_id, active["card_id"], active["support_card_ids"],
+                                active["friend_support_card_id"], reason="new singleModeCharaId")
+        active = None
+
+    started_at = datetime.fromtimestamp(data["timestamp"] / 1000, tz=timezone.utc)
+    dashboard_msg_id = active["dashboard_msg_id"] if active else None
+    # A fresh row (no prior training_start seen for this exact run) has no deck data —
+    # _deck_positions/_bonds_text/_training_lines all degrade gracefully without it.
+    support_card_ids = active["support_card_ids"] if active else None
+    friend_support_card_id = active["friend_support_card_id"] if active else None
+    deck_positions = _deck_positions({
+        "support_card_ids": support_card_ids, "friend_support_card_id": friend_support_card_id,
+    })
+
+    dashboard_msg_id = await _update_progress_dashboard(user_id, data, deck_positions, dashboard_msg_id)
+
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        await _save_active(conn, user_id, "manual", card_id, data.get("scenarioId"), started_at, None,
+                            dashboard_msg_id, support_card_ids, friend_support_card_id, single_mode_chara_id)
+        for ce in data.get("chainEvents", []):
+            await _add_chain_event(conn, user_id, single_mode_chara_id, data["turn"],
+                                    ce["storyId"], ce["supportCardId"])
+        await conn.commit()
+
+    logger.info(f"[Training] training_progress for user {user_id}: turn={data['turn']}, cardId={card_id}")

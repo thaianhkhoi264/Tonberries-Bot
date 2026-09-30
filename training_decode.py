@@ -112,9 +112,89 @@ def _stat_table() -> dict:
 _STAT_KEY_ALIASES = {"wiz": "wits"}
 
 
+# training_progress's `statGains[].targetType` — confirmed via real per-turn capture
+# (plan doc, Event 4), cross-checked against dozens of real turn transitions, not
+# pattern-matched from one example. Distinct key space from the factor/spark `type`
+# table above — same integers, unrelated meaning.
+_TARGET_TYPE_STAT_NAMES = {
+    1: "Speed", 2: "Stamina", 3: "Power", 4: "Guts", 5: "Wit",
+    6: "SP Bonus", 10: "Vital", 30: "Skill Pts",
+}
+
+
+# training_progress's `performanceGains[].performanceType` (Live scenario only) —
+# confirmed via direct player knowledge + partial data cross-check (plan doc, Event 4).
+# "Composure" for stat 5 is now user-confirmed directly, resolving an earlier back-and-
+# forth in this doc over "Compassion"/"Composture"/"Composure" guesses.
+_PERFORMANCE_TYPE_NAMES = {1: "Dance", 2: "Passion", 3: "Vocal", 4: "Visual", 5: "Composure"}
+
+
+def performance_type_display(performance_type: int) -> str:
+    """Display name for a performanceGains `performanceType`, or the raw number
+    (prefixed) if unmapped."""
+    return _PERFORMANCE_TYPE_NAMES.get(performance_type, f"Unknown ({performance_type})")
+
+
+# performanceType -> emoji_mapping.json's "performance_token" key. Note this uses "co"
+# for type 5, not "me" — two icons exist for that stat (uma.guide's gl-tokens set
+# labels them "Me" and "Co"), and "co"/"Composure" is the confirmed correct display
+# term, see performance_type_display()'s note above.
+_PERFORMANCE_TYPE_EMOJI_KEYS = {1: "da", 2: "pa", 3: "vo", 4: "vi", 5: "co"}
+
+
+def _performance_token_table() -> dict:
+    """{ "da"/"pa"/"vo"/"vi"/"me"/"co" -> Discord emoji markup } — see
+    tests/upload_misc_icon_emojis.py."""
+    return _load(EMOJI_MAPPING_JSON).get("performance_token", {})
+
+
+def performance_type_emoji(performance_type: int) -> Optional[str]:
+    """Discord emoji for a performanceGains `performanceType`. None if unmapped."""
+    key = _PERFORMANCE_TYPE_EMOJI_KEYS.get(performance_type)
+    return _performance_token_table().get(key) if key else None
+
+
+def target_type_display(target_type: int) -> str:
+    """Display name for a statGains/performanceGains `targetType`, or the raw number
+    (prefixed) if it's not one of the confirmed values — e.g. an unmapped >=101 bond
+    targetId shouldn't be confused with this table, that's a different ID space."""
+    return _TARGET_TYPE_STAT_NAMES.get(target_type, f"Unknown ({target_type})")
+
+
 def stat_emoji(stat_key: str) -> Optional[str]:
     """Discord emoji for a training_end `stats` key (e.g. "speed", "wiz"). None if unmapped."""
     return _stat_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
+
+
+def _stat_rainbow_table() -> dict:
+    """{ "speed"/"stamina"/"power"/"guts"/"wits" -> Discord emoji markup } — the
+    rainbow-training badge per stat, see tests/upload_misc_icon_emojis.py."""
+    return _load(EMOJI_MAPPING_JSON).get("stat_rainbow", {})
+
+
+def stat_rainbow_emoji(stat_key: str) -> Optional[str]:
+    """Discord emoji for a rainbow-training badge (e.g. "speed", "wiz"). None if unmapped."""
+    return _stat_rainbow_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
+
+
+def _mood_table() -> dict:
+    """{ "0_left".."4_left"/"0_right".."4_right" -> Discord emoji markup } — each of the
+    5 in-game motivation badges split left/right, see tests/upload_misc_icon_emojis.py."""
+    return _load(EMOJI_MAPPING_JSON).get("mood", {})
+
+
+def mood_emojis(mood_value: int) -> Optional[str]:
+    """Combined left+right emoji pair for chara_info.motivation. The payload's mood
+    value is 1-5; our icon set (and emoji_mapping.json's "mood" keys) is 0-4 — user-
+    confirmed the icon index is simply `mood_value - 1`. None if unmapped (out of
+    range, or the emoji table hasn't got that index for some reason)."""
+    idx = mood_value - 1
+    table = _mood_table()
+    left = table.get(f"{idx}_left")
+    right = table.get(f"{idx}_right")
+    if left is None or right is None:
+        return None
+    return f"{left}{right}"
 
 
 def _support_card_type_table() -> dict:
@@ -149,6 +229,16 @@ def support_card_type(support_card_id: int) -> Optional[str]:
         return _SUPPORT_CARD_TYPE_NAMES[row["type"]]
     except (KeyError, IndexError, TypeError):
         return None
+
+
+def support_card_name(support_card_id: int) -> Optional[str]:
+    """English display name for a supportCardId, from the same build-planner table as
+    support_card_type() above. None if unresolved (degrade gracefully, as elsewhere)."""
+    row = _support_card_type_table().get(str(support_card_id))
+    if row is None:
+        return None
+    name = row.get("name")
+    return name[1] if isinstance(name, list) and len(name) > 1 else None
 
 
 def support_card_type_emoji(support_card_id: int) -> Optional[str]:
@@ -226,6 +316,111 @@ def character_icon_path(card_id: int) -> Optional[str]:
     base_id, _outfit_index = decode_card_id(card_id)
     path = os.path.join(UMA_TOOLS_CHARA_ICON_DIR, f"trained_chr_icon_{base_id}_{card_id}_02.png")
     return path if os.path.exists(path) else None
+
+
+# training_progress's `chara_effect_id_array` (statusEffects) — confirmed via
+# master.mdb's text_data, category 142 (id 7 = "Fast Learner", user-confirmed against
+# real gameplay). Hardcoded rather than loaded from a JSON file like the factor/skill/
+# character tables above: unlike those, this has no existing sync source (it isn't
+# published anywhere uma.moe/GitHub-hosted already), and it's a small, rarely-changing
+# enum — new status effects come with new scenarios, not weekly content drops — so a
+# static table is the pragmatic choice unless that turns out wrong.
+_STATUS_EFFECT_NAMES = {
+    1: "Night Owl", 2: "Slacker", 3: "Skin Outbreak", 4: "Slow Metabolism",
+    5: "Migraine", 6: "Practice Poor", 7: "Fast Learner", 8: "Charming ○",
+    9: "Hot Topic", 10: "Practice Perfect ○", 11: "Practice Perfect ◎",
+    12: "Under the Weather", 13: "Shining Brightly", 14: "Fan Promise (Hokkaido)",
+    15: "Fan Promise (Hokuto)", 16: "Fan Promise (Nakayama)", 17: "Fan Promise (Kansai)",
+    18: "Fan Promise (Kokura)", 19: "Not Ready", 20: "Legs of Glass",
+    21: "Ominous Portent", 22: "Idol's Promise (Kawasaki)", 23: "Hero's Brilliance",
+    24: "Bud Longing for Spring", 100: "Pure Passion: Team Sirius",
+    101: "Pure Passion: Heirs to the Throne", 102: "Pure Passion: Progenitors and Guides",
+}
+
+
+def status_effect_name(effect_id: int) -> Optional[str]:
+    """Name for a chara_info.chara_effect_id_array entry, or None if unresolved
+    (new content this table hasn't caught up to — degrade gracefully, as elsewhere)."""
+    return _STATUS_EFFECT_NAMES.get(effect_id)
+
+
+def base_character_name(base_id: int) -> Optional[str]:
+    """Name for a *bare* base character id (no outfit digit) — e.g. training_progress's
+    guest-partner ids (targetId >=101 that aren't the 101-106 unidentified range —
+    confirmed to be the same base-id scheme as cardId's base half, just without an
+    outfit, see plan doc's Event 4 "Run separation"/bonds notes). Not the same as
+    character_display(), which expects a full cardId and also resolves an outfit."""
+    row = _character_names_table().get(str(base_id))
+    return row.get("name") if row else None
+
+
+# bonds[]/facilities[]' targetId 101-106 — previously flagged "we don't know what this
+# is" in the plan doc, now confirmed: targetId - 100 + 9000 = chara_id (e.g. 102 -> 9002),
+# the six trainer/assistant "Pal"-type characters. Verified against master.mdb text_data
+# directly (102 -> "Yayoi Akikawa", 103 -> "Etsuko Otonashi", user-confirmed against real
+# gameplay) plus the remaining four resolved the same way.
+_BOND_TRAINER_NAMES = {
+    101: "Tazuna Hayakawa", 102: "Yayoi Akikawa", 103: "Etsuko Otonashi",
+    104: "Aoi Kiryuin", 105: "Sasami Anshinzawa", 106: "Riko Kashimoto",
+}
+
+
+def bond_partner_name(target_id: int, deck_positions: Optional[list] = None) -> Optional[str]:
+    """Resolves a bonds[]/facilities[] targetId to a display name.
+    - 1-6: deck position — needs `deck_positions` (the 6 supportCardIds in order,
+      position 6 being friendSupportCardId); None (not 0) if omitted, so callers that
+      don't have the deck handy get an honest "can't resolve" rather than a wrong guess.
+    - 101-106: the six trainer/assistant staff (see _BOND_TRAINER_NAMES above).
+    - anything else: a guest character's bare base id (see base_character_name)."""
+    if 1 <= target_id <= 6:
+        if not deck_positions:
+            return None
+        cid = deck_positions[target_id - 1]
+        return support_card_name(cid) or f"Card {cid}"
+    if target_id in _BOND_TRAINER_NAMES:
+        return _BOND_TRAINER_NAMES[target_id]
+    return base_character_name(target_id)
+
+
+# ---------------------------------------------------------------------------
+# Turn -> in-game calendar date (training_progress's `turn` field)
+#
+# Confirmed turn-by-turn against the real in-game calendar (not derived/guessed):
+#   - Turns 13-24: Junior Year, a half year (career starts mid-year) — Jul-E through
+#     Dec-L, 12 turns / 6 months.
+#   - Turns 25-48: Classic Year, a full year — Jan-E through Dec-L, 24 turns.
+#   - Turns 49-72: Senior Year, a full year — Jan-E through Dec-L, 24 turns.
+# Concert checkpoints (see the plan doc's Event 4 / single_mode_live_live_data) land
+# on turns 24/36/48/60/72 — one at Junior Year's end (it's only a half year), then
+# one mid-year + one year-end for each of Classic and Senior, with 72 doubling as
+# the finale.
+#
+# Turns 1-12 (pre-debut) and anything past 72 have no confirmed date — turn_to_date
+# returns None for those rather than guessing, same degrade-gracefully convention as
+# the rest of this module.
+# ---------------------------------------------------------------------------
+
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+_TURN_YEAR_BLOCKS = [
+    (13, 24, 6, "Junior Year"),   # half year, starts July (index 6)
+    (25, 48, 0, "Classic Year"),  # full year, starts January
+    (49, 72, 0, "Senior Year"),   # full year, starts January
+]
+
+
+def turn_to_date(turn: int) -> Optional[dict]:
+    """{"date": "Late Dec", "year": "Junior Year", "label": "Late Dec, Junior Year"}
+    for a training_progress `turn` number, or None if it's outside the confirmed
+    13-72 range (pre-debut or uncharted post-finale)."""
+    for start, end, start_month_idx, year_name in _TURN_YEAR_BLOCKS:
+        if start <= turn <= end:
+            offset = turn - start
+            month_idx = (start_month_idx + offset // 2) % 12
+            half = "Early" if offset % 2 == 0 else "Late"
+            date = f"{half} {_MONTHS[month_idx]}"
+            return {"date": date, "year": year_name, "label": f"{date}, {year_name}"}
+    return None
 
 
 def skill_display(skill_id: int) -> dict:

@@ -187,6 +187,39 @@ async def handle_training_abandoned(request):
     return web.json_response({"success": True, "message": "training_abandoned recorded"})
 
 
+async def handle_training_progress(request):
+    user_id, err = _authenticate(request)
+    if err:
+        return err
+
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({"success": False, "error": "Invalid JSON in request body"}, status=400)
+
+    # Manual only, per the plan doc — no fallback/resolution needed the way
+    # training_end's mode is optional; this event simply doesn't fire for
+    # Independent Training, so it's required and strict here.
+    error = _require_fields(
+        data,
+        ["mode", "timestamp", "singleModeCharaId", "cardId", "scenarioId", "turn",
+         "vital", "maxVital", "fans", "stats", "skillPoint"],
+    )
+    if error:
+        return web.json_response({"success": False, "error": error}, status=400)
+
+    if data["mode"] != "manual":
+        return web.json_response({"success": False, "error": "'mode' must be 'manual' for training_progress"}, status=400)
+
+    try:
+        await training_module.handle_training_progress(user_id, data)
+    except Exception as e:
+        api_logger.error(f"Error handling training_progress for user {user_id}: {e}", exc_info=True)
+        return web.json_response({"success": False, "error": "Internal server error"}, status=500)
+
+    return web.json_response({"success": True, "message": "training_progress recorded"})
+
+
 async def handle_health_check(request):
     return web.json_response({
         "status": "ok",
@@ -213,6 +246,7 @@ def create_app():
     app.router.add_post("/api/horseact/training_start", handle_training_start)
     app.router.add_post("/api/horseact/training_end", handle_training_end)
     app.router.add_post("/api/horseact/training_abandoned", handle_training_abandoned)
+    app.router.add_post("/api/horseact/training_progress", handle_training_progress)
     app.router.add_get("/api/health", handle_health_check)
 
     if cors:
@@ -234,6 +268,7 @@ async def start_api_server(host="0.0.0.0", port=8081):
     api_logger.info(f"  POST http://{host}:{port}/api/horseact/training_start")
     api_logger.info(f"  POST http://{host}:{port}/api/horseact/training_end")
     api_logger.info(f"  POST http://{host}:{port}/api/horseact/training_abandoned")
+    api_logger.info(f"  POST http://{host}:{port}/api/horseact/training_progress")
     api_logger.info(f"  GET  http://{host}:{port}/api/health")
     api_logger.info(f"API keys loaded from {API_KEYS_FILE}")
 

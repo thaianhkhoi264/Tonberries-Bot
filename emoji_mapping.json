@@ -1405,5 +1405,32 @@
     "295": "<:utx_ico_statusrank_295:1553969537639256085>",
     "296": "<:utx_ico_statusrank_296:1553969540466217050>",
     "297": "<:utx_ico_statusrank_297:1553969543096045699>"
+  },
+  "stat_rainbow": {
+    "speed": "<:utx_ico_obtain_00_rainbow:1554956288658509824>",
+    "stamina": "<:utx_ico_obtain_01_rainbow:1554956291888120038>",
+    "power": "<:utx_ico_obtain_02_rainbow:1554956294383738982>",
+    "guts": "<:utx_ico_obtain_03_rainbow:1554956297286328351>",
+    "wits": "<:utx_ico_obtain_04_rainbow:1554956300251566171>"
+  },
+  "mood": {
+    "0_left": "<:utx_ico_motivation_m_00_left:1554956257943879781>",
+    "0_right": "<:utx_ico_motivation_m_00_right:1554956261228028065>",
+    "1_left": "<:utx_ico_motivation_m_01_left:1554956264251850792>",
+    "1_right": "<:utx_ico_motivation_m_01_right:1554956267338997841>",
+    "2_left": "<:utx_ico_motivation_m_02_left:1554956270656815116>",
+    "2_right": "<:utx_ico_motivation_m_02_right:1554956273596891136>",
+    "3_left": "<:utx_ico_motivation_m_03_left:1554956276369465534>",
+    "3_right": "<:utx_ico_motivation_m_03_right:1554956278986444851>",
+    "4_left": "<:utx_ico_motivation_m_04_left:1554956281905938513>",
+    "4_right": "<:utx_ico_motivation_m_04_right:1554956285194141797>"
+  },
+  "performance_token": {
+    "da": "<:perf00:1554959551390941224>",
+    "pa": "<:perf01:1554959554687533136>",
+    "vo": "<:perf02:1554959557535600661>",
+    "vi": "<:perf03:1554959561100894218>",
+    "me": "<:perf04:1554959563583922261>",
+    "co": "<:perf05:1554959566465273937>"
   }
 }
