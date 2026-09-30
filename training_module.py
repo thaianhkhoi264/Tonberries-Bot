@@ -1128,7 +1128,16 @@ def _status_effects_text(status_effect_ids: list[int]) -> str | None:
     return ", ".join(decode.status_effect_name(i) or f"Unknown ({i})" for i in status_effect_ids)
 
 
-def _training_lines(facilities: list[dict], deck_positions: list | None) -> list[str]:
+_RAINBOW_BOND_THRESHOLD = 80  # a same-type card only actually contributes to the
+                               # rainbow count once its bond hits this — user-confirmed.
+                               # Styling (bold/underline) stays type-only, no bond
+                               # gate — see _resolve_partner_styled.
+
+
+def _training_lines(facilities: list[dict], deck_positions: list | None,
+                     bonds: list[dict] | None = None) -> list[str]:
+    bond_by_target_id = {b["targetId"]: b.get("evaluation", 0) for b in (bonds or [])}
+
     lines = []
     for f in facilities:
         cmd = f["commandId"]
@@ -1136,12 +1145,17 @@ def _training_lines(facilities: list[dict], deck_positions: list | None) -> list
         rainbow_type = _FACILITY_RAINBOW_TYPE.get(cmd)
         partner_ids = f.get("partnerTargetIds", f.get("supportCardIds", []))  # tolerate the old field name too
 
+        # Rainbow count: same-type AND bond >= _RAINBOW_BOND_THRESHOLD. E.g. Agnes
+        # Tachyon (Speed, bond 80+) and Kitasan Black (Speed, bond <80) both in Speed
+        # training counts as 1x rainbow (only Agnes Tachyon qualifies), but both still
+        # get bold/underlined below — that styling is type-only, not bond-gated.
         rainbow_count = 0
         if deck_positions and rainbow_type:
             for pid in partner_ids:
                 if 1 <= pid <= 6:
                     cid = deck_positions[pid - 1]
-                    if decode.support_card_type(cid) == rainbow_type:
+                    if (decode.support_card_type(cid) == rainbow_type
+                            and bond_by_target_id.get(pid, 0) >= _RAINBOW_BOND_THRESHOLD):
                         rainbow_count += 1
 
         if rainbow_count:
@@ -1277,7 +1291,7 @@ def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None,
     if chain_text:
         _add_chunked_field(embed, "Chain Events", chain_text.split("\n"))
 
-    training_lines = _training_lines(data.get("facilities", []), deck_positions)
+    training_lines = _training_lines(data.get("facilities", []), deck_positions, data.get("bonds", []))
     if training_lines:
         _add_chunked_field(embed, "Training", training_lines)
 
