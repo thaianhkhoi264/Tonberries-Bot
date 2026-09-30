@@ -111,3 +111,8 @@ UMA_TOOLS_SUPPORT_ICON_DIR = "/home/piberry/uma-tools/icons/support"
 # far for a supportCardId -> training type (Speed/Stamina/Power/Guts/Wit/Pal/Group)
 # mapping; not training-event-specific, just uma-tools' full card list.
 UMA_TOOLS_BUILD_PLANNER_CARDS_JSON = "/home/piberry/uma-tools/build-planner/cards.json"
+
+# Same clone's top-level icon set (not icons/support or icons/chara) — holds the
+# training-type badges (utx_ico_obtain_00..06.png, Speed..Group) stamped onto each
+# support card in the training embeds' support-card strip.
+UMA_TOOLS_ICON_DIR = "/home/piberry/uma-tools/icons"

@@ -28,6 +28,7 @@ from global_config import (
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
     UMA_TOOLS_BUILD_PLANNER_CARDS_JSON,
+    UMA_TOOLS_ICON_DIR,
     EMOJI_MAPPING_JSON,
 )
 
@@ -158,6 +159,26 @@ def support_card_type_emoji(support_card_id: int) -> Optional[str]:
     if name is None:
         return None
     return _stat_table().get(_SUPPORT_CARD_TYPE_EMOJI_KEYS[name])
+
+
+# index -> uma-tools' own type-icon filename, same icon set as the emoji above but as
+# a raw PNG (for compositing directly onto the support-card strip image, rather than
+# rendering as embed text).
+_SUPPORT_CARD_TYPE_ICON_FILENAMES = [f"utx_ico_obtain_{i:02d}.png" for i in range(7)]
+
+
+def support_card_type_icon_path(support_card_id: int) -> Optional[str]:
+    """Full path to the training-type badge PNG for a supportCardId, or None if the
+    card is unresolved or the icon file is missing."""
+    row = _support_card_type_table().get(str(support_card_id))
+    if row is None:
+        return None
+    try:
+        filename = _SUPPORT_CARD_TYPE_ICON_FILENAMES[row["type"]]
+    except (KeyError, IndexError, TypeError):
+        return None
+    path = os.path.join(UMA_TOOLS_ICON_DIR, filename)
+    return path if os.path.exists(path) else None
 
 
 def spark_star_emojis(level: int) -> str:

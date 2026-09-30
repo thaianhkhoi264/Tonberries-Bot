@@ -24,6 +24,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 from global_config import UMA_TOOLS_SUPPORT_ICON_DIR
+import training_decode as decode
 
 _FONT_PATH = "fonts/FOT-UDKakugo C80 Pro.ttf"
 _NATIVE_CARD_SIZE = 256          # native support_card_s_*.png size
@@ -33,6 +34,11 @@ _CARD_SIZE = _NATIVE_CARD_SIZE * _SCALE
 _FONT_SIZE = 28 * _SCALE * _TEXT_SCALE
 _PADDING = 8 * _SCALE
 _STROKE_WIDTH = 2 * _SCALE * _TEXT_SCALE
+
+# Type-icon badge (Speed/Stamina/.../Group, top-left corner) — native uma-tools icons
+# are 70x70 against a 256x256 card, so this keeps roughly that same proportion at
+# whatever _CARD_SIZE ends up being.
+_TYPE_ICON_SIZE = round(_CARD_SIZE * 70 / _NATIVE_CARD_SIZE)
 
 
 # Lowercased filename -> actual filename, cached lazily. Most of uma-tools'
@@ -69,6 +75,18 @@ def _card_image(support_card_id: int) -> Image.Image:
     return placeholder
 
 
+def _draw_type_icon(img: Image.Image, support_card_id: int) -> None:
+    """Pastes the card's training-type badge (Speed/Stamina/.../Group) in the top-left
+    corner — same corner the game's own support-card art uses for this badge. Silently
+    does nothing if the card or its type icon isn't resolvable (degrade gracefully,
+    same convention as the rest of the training feature)."""
+    icon_path = decode.support_card_type_icon_path(support_card_id)
+    if not icon_path:
+        return
+    icon = Image.open(icon_path).convert("RGBA").resize((_TYPE_ICON_SIZE, _TYPE_ICON_SIZE), Image.LANCZOS)
+    img.paste(icon, (_PADDING, _PADDING), icon)
+
+
 def _draw_corner_text(img: Image.Image, text: str, corner: str) -> None:
     """corner: "bottom_right" or "top_right". White text, black stroke for contrast."""
     draw = ImageDraw.Draw(img)
@@ -89,6 +107,7 @@ def _render_strip(cards: list[dict]) -> io.BytesIO | None:
     images = []
     for i, card in enumerate(cards):
         img = _card_image(card["supportCardId"]).copy()
+        _draw_type_icon(img, card["supportCardId"])
         if "limitBreakCount" in card:
             _draw_corner_text(img, f"{card['limitBreakCount']}LB", "bottom_right")
         if i == len(cards) - 1:
