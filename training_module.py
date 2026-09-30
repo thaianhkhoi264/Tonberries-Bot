@@ -1214,7 +1214,36 @@ def _live_show_not_learned_blocks(live_show: dict) -> list[str]:
     return blocks
 
 
-def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None) -> discord.Embed:
+def _chain_events_text(chain_events: list[dict]) -> str | None:
+    """One line per distinct support card with a chain event seen so far this run,
+    showing its most-advanced known position/total (see chain_progress.json,
+    tests/extract_chain_progress.py). Entries with supportCardId 0 (a non-card-
+    specific story beat — character's own story, or date-triggered) are skipped,
+    same as entries whose storyId isn't a chain event at all (a standalone side
+    event, or the table just hasn't caught up to it yet)."""
+    best: dict[int, dict] = {}
+    for ce in chain_events:
+        cid = ce["support_card_id"]
+        if not cid:
+            continue
+        progress = decode.chain_progress(ce["story_id"])
+        if not progress:
+            continue
+        if cid not in best or progress["position"] > best[cid]["position"]:
+            best[cid] = progress
+    if not best:
+        return None
+    lines = []
+    for cid, progress in best.items():
+        name = decode.support_card_name(cid) or f"Card {cid}"
+        ctype = decode.support_card_type(cid)
+        label = f"{name} ({ctype})" if ctype else name
+        lines.append(f"[{label}] {progress['position']}/{progress['total']}")
+    return "\n".join(lines)
+
+
+def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None,
+                           chain_events: list[dict] | None = None) -> discord.Embed:
     card_id = data["cardId"]
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
@@ -1243,6 +1272,10 @@ def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None)
     status_text = _status_effects_text(data.get("statusEffects", []))
     if status_text:
         _add_chunked_field(embed, "Status Effects", [status_text])
+
+    chain_text = _chain_events_text(chain_events or [])
+    if chain_text:
+        _add_chunked_field(embed, "Chain Events", chain_text.split("\n"))
 
     training_lines = _training_lines(data.get("facilities", []), deck_positions)
     if training_lines:
@@ -1279,7 +1312,8 @@ _last_progress_edit: dict[int, datetime] = {}
 
 
 async def _update_progress_dashboard(user_id: int, data: dict, deck_positions: list | None,
-                                      dashboard_msg_id: int | None) -> int | None:
+                                      dashboard_msg_id: int | None,
+                                      chain_events: list[dict] | None = None) -> int | None:
     """Edits (or creates, if missing) this user's dashboard message with the live
     training_progress view. Returns the message id. Throttled per _PROGRESS_EDIT_MIN_INTERVAL
     — returns the existing msg_id unchanged without editing if called too soon."""
@@ -1293,7 +1327,7 @@ async def _update_progress_dashboard(user_id: int, data: dict, deck_positions: l
         logger.warning("[Training] Dashboard channel not found/configured")
         return dashboard_msg_id
 
-    embed = _build_progress_embed(user_id, data, deck_positions)
+    embed = _build_progress_embed(user_id, data, deck_positions, chain_events)
     live_embed = _build_live_show_embed(data)
     embeds = [embed, live_embed] if live_embed else [embed]
 
@@ -1354,14 +1388,20 @@ async def handle_training_progress(user_id: int, data: dict) -> None:
         "support_card_ids": support_card_ids, "friend_support_card_id": friend_support_card_id,
     })
 
-    dashboard_msg_id = await _update_progress_dashboard(user_id, data, deck_positions, dashboard_msg_id)
+    # Record this turn's chain event(s) first, so the embed's Chain Events field
+    # reflects this turn too, not just prior ones.
+    async with aiosqlite.connect(LOCAL_DB) as conn:
+        for ce in data.get("chainEvents", []):
+            await _add_chain_event(conn, user_id, single_mode_chara_id, data["turn"],
+                                    ce["storyId"], ce["supportCardId"])
+        await conn.commit()
+        chain_events = await _get_chain_events(conn, user_id, single_mode_chara_id)
+
+    dashboard_msg_id = await _update_progress_dashboard(user_id, data, deck_positions, dashboard_msg_id, chain_events)
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_active(conn, user_id, "manual", card_id, data.get("scenarioId"), started_at, None,
                             dashboard_msg_id, support_card_ids, friend_support_card_id, single_mode_chara_id)
-        for ce in data.get("chainEvents", []):
-            await _add_chain_event(conn, user_id, single_mode_chara_id, data["turn"],
-                                    ce["storyId"], ce["supportCardId"])
         await conn.commit()
 
     logger.info(f"[Training] training_progress for user {user_id}: turn={data['turn']}, cardId={card_id}")

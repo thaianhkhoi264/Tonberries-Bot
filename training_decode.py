@@ -25,6 +25,7 @@ from typing import Optional
 from global_config import (
     TRAINING_FACTORS_JSON,
     TRAINING_CHARACTER_NAMES_JSON,
+    TRAINING_CHAIN_PROGRESS_JSON,
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
     UMA_TOOLS_BUILD_PLANNER_CARDS_JSON,
@@ -82,6 +83,22 @@ def _factor_table() -> dict[str, dict]:
 def _character_names_table() -> dict:
     """{ baseCharacterId (str) -> { name, skins: { outfitIndex: label } } }"""
     return _load(TRAINING_CHARACTER_NAMES_JSON) or {}
+
+
+def _chain_progress_table() -> dict:
+    """{ storyId (str) -> { position, total, supportCardId, supportCharaId } } — see
+    tests/extract_chain_progress.py. Only "chain" story_ids are present (a standalone
+    side event has no position/total, see the plan doc's chain-event investigation)."""
+    return _load(TRAINING_CHAIN_PROGRESS_JSON) or {}
+
+
+def chain_progress(story_id: int) -> Optional[dict]:
+    """{"position": N, "total": M} for a chain-event storyId, or None if it's not a
+    chain event (a standalone side event) or the table hasn't caught up to it yet."""
+    row = _chain_progress_table().get(str(story_id))
+    if row is None:
+        return None
+    return {"position": row["position"], "total": row["total"]}
 
 
 def _skill_names_table() -> dict:

@@ -96,6 +96,11 @@ TRAINING_FACTORS_JSON         = f"{TRAINING_DATA_DIR}/factors.json"
 TRAINING_CHARACTERS_JSON      = f"{TRAINING_DATA_DIR}/character.json"
 TRAINING_CHARACTER_NAMES_JSON = f"{TRAINING_DATA_DIR}/character_names.json"
 
+# Support-card chain-event progress (story_id -> position/total in its chain), from
+# tests/extract_chain_progress.py run locally against a real game client's master.mdb.
+# No public sync source (unlike the three above) — refresh by hand when needed.
+TRAINING_CHAIN_PROGRESS_JSON  = f"{TRAINING_DATA_DIR}/chain_progress.json"
+
 # Trained-character portrait PNGs from the local uma-tools clone (kept fresh by its
 # own daily cron `git pull`, same source as the emoji icons above) — used as the
 # training embeds' thumbnail. Referenced directly, not copied, so it stays in sync
