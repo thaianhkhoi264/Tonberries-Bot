@@ -27,6 +27,7 @@ from global_config import (
     TRAINING_CHARACTER_NAMES_JSON,
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
+    UMA_TOOLS_BUILD_PLANNER_CARDS_JSON,
     EMOJI_MAPPING_JSON,
 )
 
@@ -113,6 +114,50 @@ _STAT_KEY_ALIASES = {"wiz": "wits"}
 def stat_emoji(stat_key: str) -> Optional[str]:
     """Discord emoji for a training_end `stats` key (e.g. "speed", "wiz"). None if unmapped."""
     return _stat_table().get(_STAT_KEY_ALIASES.get(stat_key, stat_key))
+
+
+def _support_card_type_table() -> dict:
+    """{ supportCardId (str) -> { type: 0-6, name: [jp, en], rarity, event, hints } } —
+    uma-tools' own card-browser data (build-planner/cards.json), not something
+    training_data_sync.py writes. `type` is 0-indexed in the same order as
+    emoji_mapping.json's "stat" category (utx_ico_obtain_00..06): Speed, Stamina,
+    Power, Guts, Wit, Pal, Group — confirmed against build-planner's own type-filter
+    UI (7 buttons, same icon set) and cross-checked by name against well-known
+    base-game SSRs of each type (e.g. Silence Suzuka=Speed, Gold Ship=Stamina,
+    Special Week=Guts, Agnes Tachyon=Wit, Tazuna Hayakawa=Pal, "Team Sirius"=Group)."""
+    return _load(UMA_TOOLS_BUILD_PLANNER_CARDS_JSON) or {}
+
+
+_SUPPORT_CARD_TYPE_NAMES = ["Speed", "Stamina", "Power", "Guts", "Wit", "Pal", "Group"]
+
+# emoji_mapping.json's "stat" keys don't spell these quite the same ("wits", not
+# "Wit") — same aliasing idea as _STAT_KEY_ALIASES above, just the reverse direction.
+_SUPPORT_CARD_TYPE_EMOJI_KEYS = {
+    "Speed": "speed", "Stamina": "stamina", "Power": "power", "Guts": "guts",
+    "Wit": "wits", "Pal": "pal", "Group": "group",
+}
+
+
+def support_card_type(support_card_id: int) -> Optional[str]:
+    """"Speed"/"Stamina"/"Power"/"Guts"/"Wit"/"Pal"/"Group" for a supportCardId, or
+    None if it's not in uma-tools' card list (new content the clone hasn't synced yet)."""
+    row = _support_card_type_table().get(str(support_card_id))
+    if row is None:
+        return None
+    try:
+        return _SUPPORT_CARD_TYPE_NAMES[row["type"]]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def support_card_type_emoji(support_card_id: int) -> Optional[str]:
+    """Discord emoji for a supportCardId's training type. Reuses emoji_mapping.json's
+    existing "stat" entries — the same utx_ico_obtain_NN icon set uma-tools itself
+    uses for this exact type, already uploaded for the training-stats line."""
+    name = support_card_type(support_card_id)
+    if name is None:
+        return None
+    return _stat_table().get(_SUPPORT_CARD_TYPE_EMOJI_KEYS[name])
 
 
 def spark_star_emojis(level: int) -> str:

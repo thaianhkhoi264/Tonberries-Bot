@@ -106,3 +106,8 @@ UMA_TOOLS_CHARA_ICON_DIR = "/home/piberry/uma-tools/icons/chara"
 # training_end result embeds' `image` (the 6-card horizontal strip), from the
 # payload's supportCards array. Filename convention: support_card_s_<supportCardId>.png.
 UMA_TOOLS_SUPPORT_ICON_DIR = "/home/piberry/uma-tools/icons/support"
+
+# uma-tools' own card-browser data (its build-planner tool) — the only source found so
+# far for a supportCardId -> training type (Speed/Stamina/Power/Guts/Wit/Pal/Group)
+# mapping; not training-event-specific, just uma-tools' full card list.
+UMA_TOOLS_BUILD_PLANNER_CARDS_JSON = "/home/piberry/uma-tools/build-planner/cards.json"
