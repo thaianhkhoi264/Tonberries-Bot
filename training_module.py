@@ -96,7 +96,11 @@ async def init_db() -> None:
         # no-op once the table already exists, so add the new columns here).
         for column, coltype in (("support_card_ids", "TEXT"), ("friend_support_card_id", "INTEGER"),
                                  ("ready_notification_msg_id", "INTEGER"),
-                                 ("single_mode_chara_id", "INTEGER")):
+                                 ("single_mode_chara_id", "INTEGER"),
+                                 # Last training_progress snapshot — shown on the "glued" (abandoned)
+                                 # notice so it isn't just a bare character name with nothing else.
+                                 ("last_turn", "INTEGER"), ("last_stats", "TEXT"),
+                                 ("last_skill_point", "INTEGER"), ("last_fans", "INTEGER")):
             try:
                 await conn.execute(f"ALTER TABLE active_training ADD COLUMN {column} {coltype}")
             except Exception:
@@ -147,7 +151,8 @@ async def init_db() -> None:
 async def _get_active(conn, user_id: int) -> dict | None:
     async with conn.execute(
         "SELECT mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id, "
-        "support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id "
+        "support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id, "
+        "last_turn, last_stats, last_skill_point, last_fans "
         "FROM active_training WHERE user_id=?",
         (user_id,),
     ) as cur:
@@ -161,24 +166,36 @@ async def _get_active(conn, user_id: int) -> dict | None:
         "friend_support_card_id": row[7],
         "ready_notification_msg_id": row[8],
         "single_mode_chara_id": row[9],
+        "last_turn": row[10],
+        "last_stats": json.loads(row[11]) if row[11] else None,
+        "last_skill_point": row[12],
+        "last_fans": row[13],
     }
 
 
 async def _save_active(conn, user_id: int, mode: str, card_id: int, scenario_id: int | None,
                         started_at: datetime, ends_at: datetime | None, dashboard_msg_id: int | None,
                         support_card_ids: list | None = None, friend_support_card_id: int | None = None,
-                        single_mode_chara_id: int | None = None) -> None:
+                        single_mode_chara_id: int | None = None, last_turn: int | None = None,
+                        last_stats: dict | None = None, last_skill_point: int | None = None,
+                        last_fans: int | None = None) -> None:
     # ready_notification_msg_id always starts NULL — it's only ever set later,
     # once the independent-mode timer actually fires (see _set_ready_notification).
+    # last_turn/last_stats/last_skill_point/last_fans default to None (reset on a
+    # fresh training_start, which doesn't have this data yet) — handle_training_progress
+    # passes real values on every turn so a later "glued" notice has something to show.
     await conn.execute(
         """INSERT OR REPLACE INTO active_training
            (user_id, mode, card_id, scenario_id, started_at, ends_at, dashboard_msg_id,
-            support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
+            support_card_ids, friend_support_card_id, ready_notification_msg_id, single_mode_chara_id,
+            last_turn, last_stats, last_skill_point, last_fans)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)""",
         (user_id, mode, card_id, scenario_id, started_at.isoformat(),
          ends_at.isoformat() if ends_at else None, dashboard_msg_id,
          json.dumps(support_card_ids) if support_card_ids is not None else None,
-         friend_support_card_id, single_mode_chara_id),
+         friend_support_card_id, single_mode_chara_id, last_turn,
+         json.dumps(last_stats) if last_stats is not None else None,
+         last_skill_point, last_fans),
     )
 
 
@@ -902,7 +919,13 @@ async def handle_training_end(user_id: int, data: dict) -> str:
 
 
 def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: list | None,
-                            friend_support_card_id: int | None) -> discord.Embed:
+                            friend_support_card_id: int | None, last_turn: int | None = None,
+                            last_stats: dict | None = None, last_skill_point: int | None = None,
+                            last_fans: int | None = None) -> discord.Embed:
+    """last_turn/last_stats/last_skill_point/last_fans come from the most recent
+    training_progress seen for this run, if any — a run abandoned before any
+    training_progress ever fired (or one from before this feature shipped) simply
+    won't have them, and the fields are skipped rather than shown empty/zeroed."""
     if card_id is None:
         # No cardId anywhere — never saw this run's training_start, and the
         # payload didn't have one either. Still notify, just without specifics.
@@ -913,7 +936,20 @@ def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: 
     char = decode.character_display(card_id)
     name = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
     embed = discord.Embed(title=f"The Training for {name} was glued", colour=discord.Colour.orange())
+
+    if last_turn is not None:
+        turn_info = decode.turn_to_date(last_turn)
+        embed.description = f"Last seen: {turn_info['label'] if turn_info else 'date unconfirmed'}"
+
     embed.add_field(name="Owner", value=f"<@{user_id}>")
+
+    if last_stats:
+        stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in last_stats.items())
+        embed.add_field(name="Stats", value=stat_line, inline=False)
+    if last_skill_point is not None or last_fans is not None:
+        embed.add_field(name="Skill Points / Fans",
+                         value=f"{last_skill_point or 0} / {(last_fans or 0):,}", inline=True)
+
     filename = _thumbnail_filename(card_id)
     if filename:
         embed.set_thumbnail(url=f"attachment://{filename}")
@@ -923,14 +959,17 @@ def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: 
 
 
 async def _glue_active_run(user_id: int, card_id: int | None, support_card_ids: list | None,
-                            friend_support_card_id: int | None, reason: str) -> None:
+                            friend_support_card_id: int | None, reason: str, last_turn: int | None = None,
+                            last_stats: dict | None = None, last_skill_point: int | None = None,
+                            last_fans: int | None = None) -> None:
     """Shared "this run never got a real ending" path: posts the abandoned-runs
     notice, deletes the dashboard card, clears active state. Used both by a real
     training_abandoned POST and by handle_training_progress when a new
     singleModeCharaId shows up while an old run is still active (see the plan
     doc's "singleModeCharaId mismatch handling" decision — that case reuses this
     exact pipeline rather than silently overwriting the stale run)."""
-    embed = _build_abandoned_embed(user_id, card_id, support_card_ids, friend_support_card_id)
+    embed = _build_abandoned_embed(user_id, card_id, support_card_ids, friend_support_card_id,
+                                    last_turn, last_stats, last_skill_point, last_fans)
     files = (
         [f for f in (_thumbnail_file(card_id),
                       _dashboard_strip_file(support_card_ids, friend_support_card_id)) if f is not None]
@@ -980,7 +1019,13 @@ async def handle_training_abandoned(user_id: int, data: dict) -> None:
     support_card_ids = active["support_card_ids"] if active else None
     friend_support_card_id = active["friend_support_card_id"] if active else None
 
-    await _glue_active_run(user_id, card_id, support_card_ids, friend_support_card_id, reason="training_abandoned")
+    await _glue_active_run(
+        user_id, card_id, support_card_ids, friend_support_card_id, reason="training_abandoned",
+        last_turn=active["last_turn"] if active else None,
+        last_stats=active["last_stats"] if active else None,
+        last_skill_point=active["last_skill_point"] if active else None,
+        last_fans=active["last_fans"] if active else None,
+    )
 
 
 async def handle_confirmation_reply(message: discord.Message) -> bool:
@@ -1427,8 +1472,12 @@ async def handle_training_progress(user_id: int, data: dict) -> None:
             and active["single_mode_chara_id"] != single_mode_chara_id:
         # A different run is already active — the old one never got a real ending.
         # Glue it (same pipeline as a real training_abandoned) before starting fresh.
-        await _glue_active_run(user_id, active["card_id"], active["support_card_ids"],
-                                active["friend_support_card_id"], reason="new singleModeCharaId")
+        await _glue_active_run(
+            user_id, active["card_id"], active["support_card_ids"],
+            active["friend_support_card_id"], reason="new singleModeCharaId",
+            last_turn=active["last_turn"], last_stats=active["last_stats"],
+            last_skill_point=active["last_skill_point"], last_fans=active["last_fans"],
+        )
         active = None
 
     started_at = datetime.fromtimestamp(data["timestamp"] / 1000, tz=timezone.utc)
@@ -1454,7 +1503,9 @@ async def handle_training_progress(user_id: int, data: dict) -> None:
 
     async with aiosqlite.connect(LOCAL_DB) as conn:
         await _save_active(conn, user_id, "manual", card_id, data.get("scenarioId"), started_at, None,
-                            dashboard_msg_id, support_card_ids, friend_support_card_id, single_mode_chara_id)
+                            dashboard_msg_id, support_card_ids, friend_support_card_id, single_mode_chara_id,
+                            last_turn=data["turn"], last_stats=data.get("stats"),
+                            last_skill_point=data.get("skillPoint"), last_fans=data.get("fans"))
         await conn.commit()
 
     logger.info(f"[Training] training_progress for user {user_id}: turn={data['turn']}, cardId={card_id}")
