@@ -1022,46 +1022,78 @@ async def handle_confirmation_reply(message: discord.Message) -> bool:
 # block) a separate "Live Show" embed for song/concert bookkeeping.
 # ---------------------------------------------------------------------------
 
-# Song catalog for the Live Show embed: {liveId: (title, statBonus, concertBonus, cost)}.
-# No sync source exists for this anywhere (not uma.moe/GitHub-hosted like the
-# factor/skill/character tables), so it's a hardcoded table here, same convention as
-# training_decode.py's _STATUS_EFFECT_NAMES — resolved this session from the
-# daftuyda.moe token planner cross-checked against master.mdb, not guessed. Update by
-# hand if new Grand Live songs ship. 1006/1036 are free/auto-granted (never purchased
-# with tokens), everything else is bought with performance-point tokens.
-_SONG_CATALOG: dict[int, tuple[str, str, str | None, dict[str, int]]] = {
-    1006: ("Make Debut!", "All Performance Points +10", None, {}),
-    1036: ("Girls' Legend U", "All Attributes +10", "Friendship Bonus +10%", {}),
-    1040: ("Here Comes Our Time", "Power +22", "Friendship Bonus +5%", {"vo": 32, "me": 12}),
-    1003: ("Run n' Run!", "Skill Pts +22", "Friendship Bonus +5%", {"da": 14, "vi": 16, "me": 14}),
-    1044: ("Full Speed Ahead! Umadol Power☆", "Speed +22", "Friendship Bonus +5%", {"da": 32, "vi": 12}),
-    1057: ("Zero Is Where the Center Stands!", "Training Speed Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}),
-    1038: ("Believe in Miracles!", "Training Wit Gain +1", "Speciality Priority Up +5", {"pa": 21, "me": 21}),
-    1042: ("Go This Way", "Training Power Gain +1", "Support Chain Event Frequency +1", {"vo": 21, "me": 21}),
-    1047: ("Ring Ring Diary", "Training Stamina Gain +1", "Support Chain Event Frequency +1", {"pa": 21, "vi": 21}),
-    1046: ("Getaway! Fallin' Love", "Training Guts Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}),
-    1032: ("Run for Our Dream!", "Skill Point Bonus +2", "Speciality Priority Up +5", {"pa": 21, "vi": 21}),
-    1023: ("Our Blue Bird Days", "Training Speed Gain +2", "Speciality Priority Up +5", {"da": 21, "vi": 42}),
-    1011: ("Hey, Guess What!", "Training Guts Gain +2", "Speciality Priority Up +5", {"da": 42, "vi": 21}),
-    1012: ("Grow Up and Shine!", "Skill Point Bonus +3", "Support Chain Event Frequency +1", {"da": 21, "vo": 21, "me": 21}),
-    1045: ("Seven Colors Scenery", "Training Power Gain +2", "Speciality Priority Up +5", {"vo": 21, "me": 42}),
-    1043: ("Sunbeam Cheer", "Training Wit Gain +2", "Support Chain Event Frequency +1", {"pa": 42, "me": 21}),
-    1034: ("Hoppity Sunny Days♪", "Training Stamina Gain +2", "Speciality Priority Up +5", {"pa": 42, "vo": 21}),
-    1024: ("Precious Treasure Box", "Speed +26", "Friendship Bonus +10%", {"da": 42, "vi": 26}),
-    1020: ("Fanfare for the Future!", "Guts +26", "Friendship Bonus +10%", {"da": 26, "vi": 42}),
-    1039: ("Present March♪", "Power +22", "Friendship Bonus +5%", {"vo": 22, "me": 22}),
-    1041: ("Dream Sky", "Wit +22", "Friendship Bonus +5%", {"pa": 22, "me": 22}),
-    1021: ("The World's at Our Whim", "Stamina +22", "Friendship Bonus +5%", {"pa": 32, "vo": 12}),
-    1014: ("Sky-Blue Spring", "Guts +22", "Friendship Bonus +5%", {"da": 12, "vi": 32}),
+# Song catalog for the Live Show embed: {liveId: (title, statBonus, concertBonus,
+# cost, year)}. No sync source exists for this anywhere (not uma.moe/GitHub-hosted
+# like the factor/skill/character tables), so it's a hardcoded table here, same
+# convention as training_decode.py's _STATUS_EFFECT_NAMES — resolved this session
+# from the daftuyda.moe token planner cross-checked against master.mdb, not guessed.
+# Update by hand if new Grand Live songs ship. 1006/1036 are free/auto-granted (never
+# purchased with tokens, year=None), everything else is bought with performance-point
+# tokens once its `year` tier unlocks — see _SONG_YEAR_UNLOCK_TURN below.
+_SONG_CATALOG: dict[int, tuple[str, str, str | None, dict[str, int], str | None]] = {
+    1006: ("Make Debut!", "All Performance Points +10", None, {}, None),
+    1036: ("Girls' Legend U", "All Attributes +10", "Friendship Bonus +10%", {}, None),
+    1040: ("Here Comes Our Time", "Power +22", "Friendship Bonus +5%", {"vo": 32, "me": 12}, "1"),
+    1003: ("Run n' Run!", "Skill Pts +22", "Friendship Bonus +5%", {"da": 14, "vi": 16, "me": 14}, "1"),
+    1044: ("Full Speed Ahead! Umadol Power☆", "Speed +22", "Friendship Bonus +5%", {"da": 32, "vi": 12}, "1"),
+    1057: ("Zero Is Where the Center Stands!", "Training Speed Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}, "1"),
+    1038: ("Believe in Miracles!", "Training Wit Gain +1", "Speciality Priority Up +5", {"pa": 21, "me": 21}, "1"),
+    1042: ("Go This Way", "Training Power Gain +1", "Support Chain Event Frequency +1", {"vo": 21, "me": 21}, "1"),
+    1047: ("Ring Ring Diary", "Training Stamina Gain +1", "Support Chain Event Frequency +1", {"pa": 21, "vi": 21}, "1"),
+    1046: ("Getaway! Fallin' Love", "Training Guts Gain +1", "Support Chain Event Frequency +1", {"da": 21, "vi": 21}, "1"),
+    1032: ("Run for Our Dream!", "Skill Point Bonus +2", "Speciality Priority Up +5", {"pa": 21, "vi": 21}, "2"),
+    1023: ("Our Blue Bird Days", "Training Speed Gain +2", "Speciality Priority Up +5", {"da": 21, "vi": 42}, "2"),
+    1011: ("Hey, Guess What!", "Training Guts Gain +2", "Speciality Priority Up +5", {"da": 42, "vi": 21}, "2"),
+    1012: ("Grow Up and Shine!", "Skill Point Bonus +3", "Support Chain Event Frequency +1", {"da": 21, "vo": 21, "me": 21}, "2.5"),
+    1045: ("Seven Colors Scenery", "Training Power Gain +2", "Speciality Priority Up +5", {"vo": 21, "me": 42}, "2.5"),
+    1043: ("Sunbeam Cheer", "Training Wit Gain +2", "Support Chain Event Frequency +1", {"pa": 42, "me": 21}, "2.5"),
+    1034: ("Hoppity Sunny Days♪", "Training Stamina Gain +2", "Speciality Priority Up +5", {"pa": 42, "vo": 21}, "2.5"),
+    1024: ("Precious Treasure Box", "Speed +26", "Friendship Bonus +10%", {"da": 42, "vi": 26}, "3"),
+    1020: ("Fanfare for the Future!", "Guts +26", "Friendship Bonus +10%", {"da": 26, "vi": 42}, "3"),
+    1039: ("Present March♪", "Power +22", "Friendship Bonus +5%", {"vo": 22, "me": 22}, "3"),
+    1041: ("Dream Sky", "Wit +22", "Friendship Bonus +5%", {"pa": 22, "me": 22}, "3"),
+    1021: ("The World's at Our Whim", "Stamina +22", "Friendship Bonus +5%", {"pa": 32, "vo": 12}, "3"),
+    1014: ("Sky-Blue Spring", "Guts +22", "Friendship Bonus +5%", {"da": 12, "vi": 32}, "3"),
 }
 _FREE_SONG_IDS = {1006, 1036, 1029}  # auto-granted, never shown as "not yet learned"
 _TOKEN_TO_PERFORMANCE_TYPE = {"da": 1, "pa": 2, "vo": 3, "vi": 4, "me": 5}
 
-# training_progress's `facilities[].commandId` 601-605 — user-confirmed display names
-# (see plan doc). _FACILITY_RAINBOW_TYPE spells "Wit" (no "s") to match
-# support_card_type()'s own output exactly, for the rainbow-count comparison below.
-_FACILITY_DISPLAY_NAMES = {601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wits"}
-_FACILITY_RAINBOW_TYPE = {601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wit"}
+# Turn a song's "year" tier becomes available to purchase — INFERRED, not confirmed
+# from a real capture: daftuyda.moe's "year" tags (1/2/2.5/3) line up with this bot's
+# own confirmed career calendar (Junior=13-24, Classic=25-48, Senior=49-72) and concert
+# checkpoints (24/36/48/60/72) as: Year 1 = Junior Year (available from debut, turn
+# 13), Year 2 = Classic Year's start (turn 25, right after the 1st concert), Year 2.5
+# = Classic Year's second half (turn 37, after the 2nd/mid-year concert), Year 3 =
+# Senior Year's start (turn 49, after the 3rd concert) — matches the user's own
+# estimate of "Senior-tier songs unlock after turn 48" closely (off by one turn,
+# since 48 is Classic Year's last turn and 49 is Senior Year's first). Flagging this
+# as inferred since it's not been checked against a real payload where a song's
+# availability actually flips turn to turn.
+_SONG_YEAR_UNLOCK_TURN = {"1": 13, "2": 25, "2.5": 37, "3": 49}
+
+# training_progress's `facilities[].commandId` — two overlapping ID spaces, both
+# confirmed (not guessed): 601-605 are the Live scenario's own performance-lesson
+# facilities (user-confirmed Speed/Stamina/Power/Guts/Wits), and 101/102/103/105/106
+# are the standard stat-training facilities used in every scenario. The link between
+# the two: master.mdb's single_mode_training table gives each 601-605 row a
+# base_command_id pointing at one of 101/102/103/105/106 (601->101, 602->105,
+# 603->102, 604->103, 605->106) — combined with the user's own 601-605 naming, that
+# fixes the standard facilities' names too (101=Speed, 102=Power, 103=Guts,
+# 105=Stamina, 106=Wits). Cross-checked against the real captured payload: in every
+# one of the 5 facilities, the derived "base" stat has the largest gain value among
+# that facility's listed statGains, even though each gives a multi-stat hybrid.
+# Note: command_id 104 doesn't exist anywhere in this table — a real gap, not a typo
+# on this end; unclear what (if anything) it corresponds to.
+# _FACILITY_RAINBOW_TYPE spells "Wit" (no "s") to match support_card_type()'s own
+# output exactly, for the rainbow-count comparison below.
+_FACILITY_DISPLAY_NAMES = {
+    101: "Speed", 102: "Power", 103: "Guts", 105: "Stamina", 106: "Wits",
+    601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wits",
+}
+_FACILITY_RAINBOW_TYPE = {
+    101: "Speed", 102: "Power", 103: "Guts", 105: "Stamina", 106: "Wit",
+    601: "Speed", 602: "Stamina", 603: "Power", 604: "Guts", 605: "Wit",
+}
 
 
 def _deck_positions(active: dict | None) -> list | None:
@@ -1217,11 +1249,18 @@ def _live_show_summary_lines(live_show: dict) -> list[str]:
     return [f"**Permanent Bonus:** {permanent_line}", f"**Concert Bonus:** {concert_line}"]
 
 
-def _live_show_not_learned_blocks(live_show: dict) -> list[str]:
+def _live_show_not_learned_blocks(live_show: dict, turn: int) -> list[str]:
+    """Songs not yet learned AND already available to purchase at this turn — a
+    song whose `year` tier hasn't unlocked yet (see _SONG_YEAR_UNLOCK_TURN) is
+    skipped entirely rather than shown as "not yet learned", since it isn't
+    actually purchasable yet regardless of tokens saved up."""
     learned_ids = set(live_show.get("masterLiveIds", []))
     blocks = []
-    for lid, (title, stat_bonus, concert_bonus, cost) in _SONG_CATALOG.items():
+    for lid, (title, stat_bonus, concert_bonus, cost, year) in _SONG_CATALOG.items():
         if lid in learned_ids or lid in _FREE_SONG_IDS:
+            continue
+        unlock_turn = _SONG_YEAR_UNLOCK_TURN.get(year, 0)
+        if turn < unlock_turn:
             continue
         effect = f"{stat_bonus} / {concert_bonus}" if concert_bonus else stat_bonus
         blocks.append(f"**{title}**\n{effect}\n{_token_cost_text(cost)}")
@@ -1310,7 +1349,7 @@ def _build_live_show_embed(data: dict) -> discord.Embed | None:
         return None
     embed = discord.Embed(title="Live Show", colour=discord.Colour.gold())
     _add_chunked_field(embed, "Bonuses", _live_show_summary_lines(live_show))
-    not_learned = _live_show_not_learned_blocks(live_show)
+    not_learned = _live_show_not_learned_blocks(live_show, data["turn"])
     if not_learned:
         _add_chunked_field(embed, "Not Yet Learned", not_learned)
     return embed
