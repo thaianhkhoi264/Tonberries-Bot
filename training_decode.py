@@ -412,9 +412,9 @@ def bond_partner_name(target_id: int, deck_positions: Optional[list] = None) -> 
 # one mid-year + one year-end for each of Classic and Senior, with 72 doubling as
 # the finale.
 #
-# Turns 1-12 (pre-debut) and anything past 72 have no confirmed date — turn_to_date
-# returns None for those rather than guessing, same degrade-gracefully convention as
-# the rest of this module.
+# Turns 1-12 (pre-debut) and anything past 72 (the URA Finals stretch) have no
+# calendar date — turn_to_date labels them "Pre-Debut" / "URA Finals" instead of
+# guessing a month, per the user.
 # ---------------------------------------------------------------------------
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -426,10 +426,15 @@ _TURN_YEAR_BLOCKS = [
 ]
 
 
-def turn_to_date(turn: int) -> Optional[dict]:
+def turn_to_date(turn: int) -> dict:
     """{"date": "Late Dec", "year": "Junior Year", "label": "Late Dec, Junior Year"}
-    for a training_progress `turn` number, or None if it's outside the confirmed
-    13-72 range (pre-debut or uncharted post-finale)."""
+    for a training_progress `turn` number. Turns before 13 are "Pre-Debut" and turns
+    after 72 are "URA Finals" (no month/year breakdown for either, so `date` and
+    `label` are the same string and `year` is None)."""
+    if turn < _TURN_YEAR_BLOCKS[0][0]:
+        return {"date": "Pre-Debut", "year": None, "label": "Pre-Debut"}
+    if turn > _TURN_YEAR_BLOCKS[-1][1]:
+        return {"date": "URA Finals", "year": None, "label": "URA Finals"}
     for start, end, start_month_idx, year_name in _TURN_YEAR_BLOCKS:
         if start <= turn <= end:
             offset = turn - start
@@ -437,7 +442,7 @@ def turn_to_date(turn: int) -> Optional[dict]:
             half = "Early" if offset % 2 == 0 else "Late"
             date = f"{half} {_MONTHS[month_idx]}"
             return {"date": date, "year": year_name, "label": f"{date}, {year_name}"}
-    return None
+    raise AssertionError("unreachable: _TURN_YEAR_BLOCKS covers 13-72 contiguously")
 
 
 def skill_display(skill_id: int) -> dict:

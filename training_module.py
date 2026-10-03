@@ -938,8 +938,7 @@ def _build_abandoned_embed(user_id: int, card_id: int | None, support_card_ids: 
     embed = discord.Embed(title=f"The Training for {name} was glued", colour=discord.Colour.orange())
 
     if last_turn is not None:
-        turn_info = decode.turn_to_date(last_turn)
-        embed.description = f"Last seen: {turn_info['label'] if turn_info else 'date unconfirmed'}"
+        embed.description = f"Last seen: {decode.turn_to_date(last_turn)['label']}"
 
     embed.add_field(name="Owner", value=f"<@{user_id}>")
 
@@ -1346,8 +1345,7 @@ def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None,
     char = decode.character_display(card_id)
     title = char["name"] + (f" {char['outfit']}" if char.get("outfit") else "")
 
-    turn_info = decode.turn_to_date(data["turn"])
-    date_label = turn_info["label"] if turn_info else "Date unconfirmed"
+    date_label = decode.turn_to_date(data["turn"])["label"]
     mood_display = decode.mood_emojis(data["mood"]) if "mood" in data else None
     description = f"{date_label} — Manual Training ongoing\n{_energy_bar(data['vital'], data['maxVital'])}"
     if mood_display:
