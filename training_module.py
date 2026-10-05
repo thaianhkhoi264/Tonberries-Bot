@@ -1264,6 +1264,45 @@ def _token_cost_text(cost: dict[str, int]) -> str:
     return ", ".join(parts)
 
 
+def _performance_label(performance_type: int) -> str:
+    """Performance-point emoji, or its plain name if the emoji isn't mapped."""
+    return decode.performance_type_emoji(performance_type) or decode.performance_type_display(performance_type)
+
+
+def _points_text(performance: list[dict] | None) -> str | None:
+    """The player's five performance meters (liveShow.performance) as an emoji + value
+    line, same style as the character's stats line. The meter caps (`max`) aren't
+    shown. None if the payload didn't carry the field."""
+    if not performance:
+        return None
+    return " / ".join(
+        f"{_performance_label(p['performanceType'])} {p['value']}"
+        for p in sorted(performance, key=lambda p: p["performanceType"])
+    )
+
+
+def _shop_blocks(offered_squares: list[dict] | None) -> list[str]:
+    """One block per square currently on offer (liveShow.offeredSquares, slot order):
+    name, effect, then its cost in performance points. Song squares get the same
+    "stat bonus / concert bonus" effect line as the Not Yet Learned list; any other
+    square (stat, skill hint, energy) shows its own effect text. A square missing from
+    live_squares.json degrades to its raw id rather than being dropped."""
+    blocks = []
+    for offer in sorted(offered_squares or [], key=lambda o: o.get("squareNum", 0)):
+        square = decode.live_square(offer["squareId"])
+        if square is None:
+            blocks.append(f"**Unknown square ({offer['squareId']})**")
+            continue
+        effect = square["effect"]
+        song = _SONG_CATALOG.get(square.get("songId"))
+        if song:
+            stat_bonus, concert_bonus = song[1], song[2]
+            effect = f"{stat_bonus} / {concert_bonus}" if concert_bonus else stat_bonus
+        cost = ", ".join(f"{_performance_label(c['performanceType'])} {c['value']}" for c in square["cost"])
+        blocks.append(f"**{square['title']}**\n{effect}\n{cost}")
+    return blocks
+
+
 def _live_show_summary_lines(live_show: dict) -> list[str]:
     permanent_line = ", ".join(
         f"{'+' if b['effectValue'] >= 0 else ''}{b['effectValue']} {decode.target_type_display(b['targetType'])}"
@@ -1390,6 +1429,13 @@ def _build_live_show_embed(data: dict) -> discord.Embed | None:
     if not live_show:
         return None
     embed = discord.Embed(title="Live Show", colour=discord.Colour.gold())
+    # Field order: Points > Shop > Bonuses > Not Yet Learned.
+    points = _points_text(live_show.get("performance"))
+    if points:
+        embed.add_field(name="Points", value=points, inline=False)
+    shop = _shop_blocks(live_show.get("offeredSquares"))
+    if shop:
+        _add_chunked_field(embed, "Shop", shop)
     _add_chunked_field(embed, "Bonuses", _live_show_summary_lines(live_show))
     not_learned = _live_show_not_learned_blocks(live_show, data["turn"])
     if not_learned:

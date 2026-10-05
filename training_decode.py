@@ -26,6 +26,7 @@ from global_config import (
     TRAINING_FACTORS_JSON,
     TRAINING_CHARACTER_NAMES_JSON,
     TRAINING_CHAIN_PROGRESS_JSON,
+    TRAINING_LIVE_SQUARES_JSON,
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
     UMA_TOOLS_BUILD_PLANNER_CARDS_JSON,
@@ -90,6 +91,17 @@ def _chain_progress_table() -> dict:
     tests/extract_chain_progress.py. Only "chain" story_ids are present (a standalone
     side event has no position/total, see the plan doc's chain-event investigation)."""
     return _load(TRAINING_CHAIN_PROGRESS_JSON) or {}
+
+
+def live_square(square_id: int) -> Optional[dict]:
+    """{squareId, squareType, title, effect, cost: [{performanceType, value}], songId?}
+    for a Live-scenario square (live_squares.json), or None if it isn't in the table
+    (a square added after the file was extracted — degrade gracefully, as elsewhere)."""
+    raw = _load(TRAINING_LIVE_SQUARES_JSON)
+    for row in (raw.get("squares", []) if isinstance(raw, dict) else []):
+        if row["squareId"] == square_id:
+            return row
+    return None
 
 
 def chain_progress(story_id: int) -> Optional[dict]:

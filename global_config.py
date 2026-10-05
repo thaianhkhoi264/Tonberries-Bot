@@ -101,6 +101,13 @@ TRAINING_CHARACTER_NAMES_JSON = f"{TRAINING_DATA_DIR}/character_names.json"
 # No public sync source (unlike the three above) — refresh by hand when needed.
 TRAINING_CHAIN_PROGRESS_JSON  = f"{TRAINING_DATA_DIR}/chain_progress.json"
 
+# All 269 Live-scenario "squares" (title / effect / performance-point cost per square),
+# extracted from master_global.mdb — copied from the HorseACT RE plan folder's
+# live_squares.json. Lives at the repo root, tracked in git like emoji_mapping.json
+# (unlike the gitignored data/ files above), so a normal push/pull deploys it. Used for
+# the Live Show embed's "Shop" field (the 3 squares currently on offer).
+TRAINING_LIVE_SQUARES_JSON    = "live_squares.json"
+
 # Trained-character portrait PNGs from the local uma-tools clone (kept fresh by its
 # own daily cron `git pull`, same source as the emoji icons above) — used as the
 # training embeds' thumbnail. Referenced directly, not copied, so it stays in sync

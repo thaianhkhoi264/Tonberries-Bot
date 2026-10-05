@@ -1,0 +1,3526 @@
+{
+ "_source": "master_global.mdb: single_mode_live_square + text_data (category 209 title / 207 effect) + single_mode_live_song_list. cost = meters deducted on purchase (performanceType 1=Dance 2=Passion 3=Vocal 4=Visual 5=Composure). squareType 1=stat/skill-pt, 2=skill hint, 3=energy, 4=song.",
+ "squares": [
+  {
+   "squareId": 11001,
+   "squareType": 1,
+   "title": "Dance Step Basics",
+   "effect": "Speed +5",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11002,
+   "squareType": 1,
+   "title": "Audience Involvement Basics",
+   "effect": "Stamina +5",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11003,
+   "squareType": 1,
+   "title": "Vocal Training Basics",
+   "effect": "Power +5",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11004,
+   "squareType": 1,
+   "title": "Makeup Basics",
+   "effect": "Guts +5",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11005,
+   "squareType": 1,
+   "title": "Composure Training Basics",
+   "effect": "Wit +5",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11006,
+   "squareType": 1,
+   "title": "Watch an Up-and-Coming Idol's Concert",
+   "effect": "Skill Pts +5",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11007,
+   "squareType": 1,
+   "title": "Watch an Up-and-Coming Idol's Concert",
+   "effect": "Skill Pts +5",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11008,
+   "squareType": 1,
+   "title": "Watch an Up-and-Coming Idol's Concert",
+   "effect": "Skill Pts +5",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11009,
+   "squareType": 1,
+   "title": "Watch an Up-and-Coming Idol's Concert",
+   "effect": "Skill Pts +5",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11010,
+   "squareType": 1,
+   "title": "Watch an Up-and-Coming Idol's Concert",
+   "effect": "Skill Pts +5",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 11101,
+   "squareType": 1,
+   "title": "Dance Step Intermediate Class",
+   "effect": "Speed +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11102,
+   "squareType": 1,
+   "title": "Audience Involvement Intermediate Class",
+   "effect": "Stamina +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11103,
+   "squareType": 1,
+   "title": "Vocal Training Intermediate Class",
+   "effect": "Power +8",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11104,
+   "squareType": 1,
+   "title": "Makeup Intermediate Class",
+   "effect": "Guts +8",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11105,
+   "squareType": 1,
+   "title": "Composure Training Intermediate Class",
+   "effect": "Wit +8",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11106,
+   "squareType": 1,
+   "title": "Watch a Mid-Career Idol's Concert",
+   "effect": "Skill Pts +8",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11107,
+   "squareType": 1,
+   "title": "Watch a Mid-Career Idol's Concert",
+   "effect": "Skill Pts +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11108,
+   "squareType": 1,
+   "title": "Watch a Mid-Career Idol's Concert",
+   "effect": "Skill Pts +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11109,
+   "squareType": 1,
+   "title": "Watch a Mid-Career Idol's Concert",
+   "effect": "Skill Pts +8",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11110,
+   "squareType": 1,
+   "title": "Watch a Mid-Career Idol's Concert",
+   "effect": "Skill Pts +8",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 11201,
+   "squareType": 1,
+   "title": "Dance Step Advanced Class",
+   "effect": "Speed +12",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11202,
+   "squareType": 1,
+   "title": "Audience Involvement Advanced Class",
+   "effect": "Stamina +12",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11203,
+   "squareType": 1,
+   "title": "Vocal Training Advanced Class",
+   "effect": "Power +12",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11204,
+   "squareType": 1,
+   "title": "Makeup Advanced Class",
+   "effect": "Guts +12",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11205,
+   "squareType": 1,
+   "title": "Composure Training Advanced Class",
+   "effect": "Wit +12",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11206,
+   "squareType": 1,
+   "title": "Watch a Top-Tier Idol's Concert",
+   "effect": "Skill Pts +12",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11207,
+   "squareType": 1,
+   "title": "Watch a Top-Tier Idol's Concert",
+   "effect": "Skill Pts +12",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11208,
+   "squareType": 1,
+   "title": "Watch a Top-Tier Idol's Concert",
+   "effect": "Skill Pts +12",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11209,
+   "squareType": 1,
+   "title": "Watch a Top-Tier Idol's Concert",
+   "effect": "Skill Pts +12",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 11210,
+   "squareType": 1,
+   "title": "Watch a Top-Tier Idol's Concert",
+   "effect": "Skill Pts +12",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 24
+    }
+   ]
+  },
+  {
+   "squareId": 12001,
+   "squareType": 1,
+   "title": "Rhythm Basics",
+   "effect": "Speed +3 to 7",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12002,
+   "squareType": 1,
+   "title": "Fan Interaction Basics",
+   "effect": "Stamina +3 to 7",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12003,
+   "squareType": 1,
+   "title": "Abdominal Breathing Basics",
+   "effect": "Power +3 to 7",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12004,
+   "squareType": 1,
+   "title": "Hair Styling Basics",
+   "effect": "Guts +3 to 7",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12005,
+   "squareType": 1,
+   "title": "Solo Performance Basics",
+   "effect": "Wit +3 to 7",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12006,
+   "squareType": 1,
+   "title": "Autograph Basics",
+   "effect": "Skill Pts +3 to 7",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 12101,
+   "squareType": 1,
+   "title": "Rhythm Intermediate Class",
+   "effect": "Speed +5 to 9",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12102,
+   "squareType": 1,
+   "title": "Fan Interaction Intermediate Class",
+   "effect": "Stamina +5 to 9",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12103,
+   "squareType": 1,
+   "title": "Abdominal Breathing Intermediate Class",
+   "effect": "Power +5 to 9",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12104,
+   "squareType": 1,
+   "title": "Hair Styling Intermediate Class",
+   "effect": "Guts +5 to 9",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12105,
+   "squareType": 1,
+   "title": "Solo Performance Intermediate Class",
+   "effect": "Wit +5 to 9",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12106,
+   "squareType": 1,
+   "title": "Autograph Intermediate Class",
+   "effect": "Skill Pts +5 to 9",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 12201,
+   "squareType": 1,
+   "title": "Rhythm Advanced Class",
+   "effect": "Speed +8 to 12",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 12202,
+   "squareType": 1,
+   "title": "Fan Interaction Advanced Class",
+   "effect": "Stamina +8 to 12",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 12203,
+   "squareType": 1,
+   "title": "Abdominal Breathing Advanced Class",
+   "effect": "Power +8 to 12",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 12204,
+   "squareType": 1,
+   "title": "Hair Styling Advanced Class",
+   "effect": "Guts +8 to 12",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 12205,
+   "squareType": 1,
+   "title": "Solo Performance Advanced Class",
+   "effect": "Wit +8 to 12",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 12206,
+   "squareType": 1,
+   "title": "Autograph Advanced Class",
+   "effect": "Skill Pts +8 to 12",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 18
+    }
+   ]
+  },
+  {
+   "squareId": 13001,
+   "squareType": 1,
+   "title": "Expression Basics",
+   "effect": "Speed +4\\nStamina +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 8
+    },
+    {
+     "performanceType": 2,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13002,
+   "squareType": 1,
+   "title": "Dancing and Singing Basics",
+   "effect": "Speed +4\\nPower +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 8
+    },
+    {
+     "performanceType": 3,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13003,
+   "squareType": 1,
+   "title": "Jazz Dance Basics",
+   "effect": "Speed +4\\nGuts +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 8
+    },
+    {
+     "performanceType": 4,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13004,
+   "squareType": 1,
+   "title": "Isolation Basics",
+   "effect": "Speed +4\\nWit +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 8
+    },
+    {
+     "performanceType": 5,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13005,
+   "squareType": 1,
+   "title": "Formation Basics",
+   "effect": "Speed +4\\nSkill Pts +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 10
+    },
+    {
+     "performanceType": 4,
+     "value": 6
+    }
+   ]
+  },
+  {
+   "squareId": 13006,
+   "squareType": 1,
+   "title": "Vocal Expression Basics",
+   "effect": "Stamina +4\\nPower +4",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 8
+    },
+    {
+     "performanceType": 3,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13007,
+   "squareType": 1,
+   "title": "Acting Basics",
+   "effect": "Stamina +4\\nGuts +4",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 8
+    },
+    {
+     "performanceType": 4,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13008,
+   "squareType": 1,
+   "title": "Mic Performance Basics",
+   "effect": "Stamina +4\\nWit +4",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 8
+    },
+    {
+     "performanceType": 5,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13009,
+   "squareType": 1,
+   "title": "Yoga Basics",
+   "effect": "Stamina +4\\nSkill Pts +4",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 10
+    },
+    {
+     "performanceType": 3,
+     "value": 6
+    }
+   ]
+  },
+  {
+   "squareId": 13010,
+   "squareType": 1,
+   "title": "Harmony Basics",
+   "effect": "Power +4\\nGuts +4",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 8
+    },
+    {
+     "performanceType": 4,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13011,
+   "squareType": 1,
+   "title": "Rap Basics",
+   "effect": "Power +4\\nWit +4",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 8
+    },
+    {
+     "performanceType": 5,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13012,
+   "squareType": 1,
+   "title": "Vocal Theory Basics",
+   "effect": "Power +4\\nSkill Pts +4",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 10
+    },
+    {
+     "performanceType": 5,
+     "value": 6
+    }
+   ]
+  },
+  {
+   "squareId": 13013,
+   "squareType": 1,
+   "title": "Flexibility Basics",
+   "effect": "Guts +4\\nWit +4",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 8
+    },
+    {
+     "performanceType": 5,
+     "value": 8
+    }
+   ]
+  },
+  {
+   "squareId": 13014,
+   "squareType": 1,
+   "title": "Visuals Research Basics",
+   "effect": "Guts +4\\nSkill Pts +4",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 6
+    },
+    {
+     "performanceType": 4,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 13015,
+   "squareType": 1,
+   "title": "Idol History Basics",
+   "effect": "Wit +4\\nSkill Pts +4",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 6
+    },
+    {
+     "performanceType": 5,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 13101,
+   "squareType": 1,
+   "title": "Expression Intermediate Class",
+   "effect": "Speed +6\\nStamina +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 2,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13102,
+   "squareType": 1,
+   "title": "Dancing and Singing Intermediate Class",
+   "effect": "Speed +6\\nPower +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 3,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13103,
+   "squareType": 1,
+   "title": "Jazz Dance Intermediate Class",
+   "effect": "Speed +6\\nGuts +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13104,
+   "squareType": 1,
+   "title": "Isolation Intermediate Class",
+   "effect": "Speed +6\\nWit +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13105,
+   "squareType": 1,
+   "title": "Formation Intermediate Class",
+   "effect": "Speed +6\\nSkill Pts +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 14
+    },
+    {
+     "performanceType": 4,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 13106,
+   "squareType": 1,
+   "title": "Vocal Expression Intermediate Class",
+   "effect": "Stamina +6\\nPower +6",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 12
+    },
+    {
+     "performanceType": 3,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13107,
+   "squareType": 1,
+   "title": "Acting Intermediate Class",
+   "effect": "Stamina +6\\nGuts +6",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 12
+    },
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13108,
+   "squareType": 1,
+   "title": "Mic Performance Intermediate Class",
+   "effect": "Stamina +6\\nWit +6",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 12
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13109,
+   "squareType": 1,
+   "title": "Yoga Intermediate Class",
+   "effect": "Stamina +6\\nSkill Pts +6",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 14
+    },
+    {
+     "performanceType": 3,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 13110,
+   "squareType": 1,
+   "title": "Harmony Intermediate Class",
+   "effect": "Power +6\\nGuts +6",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 12
+    },
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13111,
+   "squareType": 1,
+   "title": "Rap Intermediate Class",
+   "effect": "Power +6\\nWit +6",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 12
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13112,
+   "squareType": 1,
+   "title": "Vocal Theory Intermediate Class",
+   "effect": "Power +6\\nSkill Pts +6",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 14
+    },
+    {
+     "performanceType": 5,
+     "value": 10
+    }
+   ]
+  },
+  {
+   "squareId": 13113,
+   "squareType": 1,
+   "title": "Flexibility Intermediate Class",
+   "effect": "Guts +6\\nWit +6",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 12
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13114,
+   "squareType": 1,
+   "title": "Visuals Research Intermediate Class",
+   "effect": "Guts +6\\nSkill Pts +6",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 10
+    },
+    {
+     "performanceType": 4,
+     "value": 14
+    }
+   ]
+  },
+  {
+   "squareId": 13115,
+   "squareType": 1,
+   "title": "Idol History Intermediate Class",
+   "effect": "Wit +6\\nSkill Pts +6",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 10
+    },
+    {
+     "performanceType": 5,
+     "value": 14
+    }
+   ]
+  },
+  {
+   "squareId": 13201,
+   "squareType": 1,
+   "title": "Expression Advanced Class",
+   "effect": "Speed +8\\nStamina +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    },
+    {
+     "performanceType": 2,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13202,
+   "squareType": 1,
+   "title": "Dancing and Singing Advanced Class",
+   "effect": "Speed +8\\nPower +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    },
+    {
+     "performanceType": 3,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13203,
+   "squareType": 1,
+   "title": "Jazz Dance Advanced Class",
+   "effect": "Speed +8\\nGuts +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    },
+    {
+     "performanceType": 4,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13204,
+   "squareType": 1,
+   "title": "Isolation Advanced Class",
+   "effect": "Speed +8\\nWit +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 16
+    },
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13205,
+   "squareType": 1,
+   "title": "Formation Advanced Class",
+   "effect": "Speed +8\\nSkill Pts +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 20
+    },
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13206,
+   "squareType": 1,
+   "title": "Vocal Expression Advanced Class",
+   "effect": "Stamina +8\\nPower +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 16
+    },
+    {
+     "performanceType": 3,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13207,
+   "squareType": 1,
+   "title": "Acting Advanced Class",
+   "effect": "Stamina +8\\nGuts +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 16
+    },
+    {
+     "performanceType": 4,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13208,
+   "squareType": 1,
+   "title": "Mic Performance Advanced Class",
+   "effect": "Stamina +8\\nWit +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 16
+    },
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13209,
+   "squareType": 1,
+   "title": "Yoga Advanced Class",
+   "effect": "Stamina +8\\nSkill Pts +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 20
+    },
+    {
+     "performanceType": 3,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13210,
+   "squareType": 1,
+   "title": "Harmony Advanced Class",
+   "effect": "Power +8\\nGuts +8",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 16
+    },
+    {
+     "performanceType": 4,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13211,
+   "squareType": 1,
+   "title": "Rap Advanced Class",
+   "effect": "Power +8\\nWit +8",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 16
+    },
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13212,
+   "squareType": 1,
+   "title": "Vocal Theory Advanced Class",
+   "effect": "Power +8\\nSkill Pts +8",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 20
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ]
+  },
+  {
+   "squareId": 13213,
+   "squareType": 1,
+   "title": "Flexibility Advanced Class",
+   "effect": "Guts +8\\nWit +8",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 16
+    },
+    {
+     "performanceType": 5,
+     "value": 16
+    }
+   ]
+  },
+  {
+   "squareId": 13214,
+   "squareType": 1,
+   "title": "Visuals Research Advanced Class",
+   "effect": "Guts +8\\nSkill Pts +8",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 4,
+     "value": 20
+    }
+   ]
+  },
+  {
+   "squareId": 13215,
+   "squareType": 1,
+   "title": "Idol History Advanced Class",
+   "effect": "Wit +8\\nSkill Pts +8",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 12
+    },
+    {
+     "performanceType": 5,
+     "value": 20
+    }
+   ]
+  },
+  {
+   "squareId": 20000,
+   "squareType": 2,
+   "title": "Group Lesson",
+   "effect": "Skill hint appropriate for aptitude",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20001,
+   "squareType": 2,
+   "title": "Group Lesson",
+   "effect": "Skill hint appropriate for aptitude",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20002,
+   "squareType": 2,
+   "title": "Group Lesson",
+   "effect": "Skill hint appropriate for aptitude",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20003,
+   "squareType": 2,
+   "title": "Group Lesson",
+   "effect": "Skill hint appropriate for aptitude",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20004,
+   "squareType": 2,
+   "title": "Group Lesson",
+   "effect": "Skill hint appropriate for aptitude",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20005,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20006,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20007,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20008,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20009,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20010,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20011,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20012,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20013,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20014,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20015,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Mile)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20016,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Mile)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20017,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Mile)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20018,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Mile)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20019,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Mile)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20020,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Medium)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20021,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Medium)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20022,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Medium)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20023,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Medium)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20024,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Medium)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20025,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Long)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20026,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Long)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20027,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Long)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20028,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Long)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20029,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Long)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20030,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20031,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20032,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20033,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20034,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20035,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20036,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20037,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20038,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20039,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20040,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20041,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20042,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20043,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20044,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20045,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20046,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20047,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20048,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20049,
+   "squareType": 2,
+   "title": "Group Lesson Basics",
+   "effect": "Skill Hint Lvl +1 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 15
+    }
+   ]
+  },
+  {
+   "squareId": 20050,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20051,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20052,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20053,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20054,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20055,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20056,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20057,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20058,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20059,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20060,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Mile)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20061,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Mile)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20062,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Mile)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20063,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Mile)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20064,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Mile)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20065,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Medium)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20066,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Medium)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20067,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Medium)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20068,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Medium)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20069,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Medium)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20070,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Long)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20071,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Long)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20072,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Long)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20073,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Long)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20074,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Long)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20075,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20076,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20077,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20078,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20079,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20080,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20081,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20082,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20083,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20084,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20085,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20086,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20087,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20088,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20089,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20090,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20091,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20092,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20093,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20094,
+   "squareType": 2,
+   "title": "Group Lesson Intermediate",
+   "effect": "Skill Hint Lvl +2 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 20095,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20096,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20097,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20098,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20099,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Dirt)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20100,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20101,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20102,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20103,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20104,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Sprint)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20105,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Mile)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20106,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Mile)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20107,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Mile)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20108,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Mile)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20109,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Mile)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20110,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Medium)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20111,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Medium)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20112,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Medium)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20113,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Medium)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20114,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Medium)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20115,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Long)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20116,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Long)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20117,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Long)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20118,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Long)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20119,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Long)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20120,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20121,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20122,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20123,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20124,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Front Runner)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20125,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20126,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20127,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20128,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20129,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Pace Chaser)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20130,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20131,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20132,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20133,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20134,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (Late Surger)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20135,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20136,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20137,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20138,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 20139,
+   "squareType": 2,
+   "title": "Group Lesson Advanced",
+   "effect": "Skill Hint Lvl +3 (End Closer)",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30000,
+   "squareType": 3,
+   "title": "Facial-Slimming Massage",
+   "effect": "Energy +20",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 30001,
+   "squareType": 3,
+   "title": "Relaxing Body Massage",
+   "effect": "Energy +30",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30002,
+   "squareType": 3,
+   "title": "Full-Body Detox",
+   "effect": "Energy +40",
+   "cost": [
+    {
+     "performanceType": 5,
+     "value": 35
+    }
+   ]
+  },
+  {
+   "squareId": 30003,
+   "squareType": 3,
+   "title": "Facial-Slimming Massage",
+   "effect": "Energy +20",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 30004,
+   "squareType": 3,
+   "title": "Relaxing Body Massage",
+   "effect": "Energy +30",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30005,
+   "squareType": 3,
+   "title": "Full-Body Detox",
+   "effect": "Energy +40",
+   "cost": [
+    {
+     "performanceType": 4,
+     "value": 35
+    }
+   ]
+  },
+  {
+   "squareId": 30006,
+   "squareType": 3,
+   "title": "Facial-Slimming Massage",
+   "effect": "Energy +20",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 30007,
+   "squareType": 3,
+   "title": "Relaxing Body Massage",
+   "effect": "Energy +30",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30008,
+   "squareType": 3,
+   "title": "Full-Body Detox",
+   "effect": "Energy +40",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 35
+    }
+   ]
+  },
+  {
+   "squareId": 30009,
+   "squareType": 3,
+   "title": "Facial-Slimming Massage",
+   "effect": "Energy +20",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 30010,
+   "squareType": 3,
+   "title": "Relaxing Body Massage",
+   "effect": "Energy +30",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30011,
+   "squareType": 3,
+   "title": "Full-Body Detox",
+   "effect": "Energy +40",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 35
+    }
+   ]
+  },
+  {
+   "squareId": 30012,
+   "squareType": 3,
+   "title": "Facial-Slimming Massage",
+   "effect": "Energy +20",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 25
+    }
+   ]
+  },
+  {
+   "squareId": 30013,
+   "squareType": 3,
+   "title": "Relaxing Body Massage",
+   "effect": "Energy +30",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 30
+    }
+   ]
+  },
+  {
+   "squareId": 30014,
+   "squareType": 3,
+   "title": "Full-Body Detox",
+   "effect": "Energy +40",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 35
+    }
+   ]
+  },
+  {
+   "squareId": 40000,
+   "squareType": 4,
+   "title": "Run for Our Dream!",
+   "effect": "Training Skill Pt Gain +2",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 21
+    },
+    {
+     "performanceType": 4,
+     "value": 21
+    }
+   ],
+   "songId": 1032
+  },
+  {
+   "squareId": 40001,
+   "squareType": 4,
+   "title": "Here Comes Our Time",
+   "effect": "Power +22",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 32
+    },
+    {
+     "performanceType": 5,
+     "value": 12
+    }
+   ],
+   "songId": 1040
+  },
+  {
+   "squareId": 40002,
+   "squareType": 4,
+   "title": "Full Speed Ahead! Umadol Power☆",
+   "effect": "Speed +22",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 32
+    },
+    {
+     "performanceType": 4,
+     "value": 12
+    }
+   ],
+   "songId": 1044
+  },
+  {
+   "squareId": 40003,
+   "squareType": 4,
+   "title": "Run n' Run!",
+   "effect": "Skill Pts +22",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 14
+    },
+    {
+     "performanceType": 4,
+     "value": 16
+    },
+    {
+     "performanceType": 5,
+     "value": 14
+    }
+   ],
+   "songId": 1003
+  },
+  {
+   "squareId": 40004,
+   "squareType": 4,
+   "title": "Grow Up and Shine!",
+   "effect": "Training Skill Pt Gain +3",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 21
+    },
+    {
+     "performanceType": 3,
+     "value": 21
+    },
+    {
+     "performanceType": 5,
+     "value": 21
+    }
+   ],
+   "songId": 1012
+  },
+  {
+   "squareId": 40005,
+   "squareType": 4,
+   "title": "Sunbeam Cheer",
+   "effect": "Training Wit Gain +2",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 42
+    },
+    {
+     "performanceType": 5,
+     "value": 21
+    }
+   ],
+   "songId": 1043
+  },
+  {
+   "squareId": 40006,
+   "squareType": 4,
+   "title": "Go This Way",
+   "effect": "Training Power Gain +1",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 21
+    },
+    {
+     "performanceType": 5,
+     "value": 21
+    }
+   ],
+   "songId": 1042
+  },
+  {
+   "squareId": 40007,
+   "squareType": 4,
+   "title": "Believe in Miracles!",
+   "effect": "Training Wit Gain +1",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 21
+    },
+    {
+     "performanceType": 5,
+     "value": 21
+    }
+   ],
+   "songId": 1038
+  },
+  {
+   "squareId": 40008,
+   "squareType": 4,
+   "title": "Seven Colors Scenery",
+   "effect": "Training Power Gain +2",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 21
+    },
+    {
+     "performanceType": 5,
+     "value": 42
+    }
+   ],
+   "songId": 1045
+  },
+  {
+   "squareId": 40009,
+   "squareType": 4,
+   "title": "Getaway! Fallin' Love",
+   "effect": "Training Guts Gain +1",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 21
+    },
+    {
+     "performanceType": 4,
+     "value": 21
+    }
+   ],
+   "songId": 1046
+  },
+  {
+   "squareId": 40010,
+   "squareType": 4,
+   "title": "Ring Ring Diary",
+   "effect": "Training Stamina Gain +1",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 21
+    },
+    {
+     "performanceType": 4,
+     "value": 21
+    }
+   ],
+   "songId": 1047
+  },
+  {
+   "squareId": 40011,
+   "squareType": 4,
+   "title": "Our Blue Bird Days",
+   "effect": "Training Speed Gain +2",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 21
+    },
+    {
+     "performanceType": 4,
+     "value": 42
+    }
+   ],
+   "songId": 1023
+  },
+  {
+   "squareId": 40012,
+   "squareType": 4,
+   "title": "The World's at Our Whim",
+   "effect": "Stamina +22",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 32
+    },
+    {
+     "performanceType": 3,
+     "value": 12
+    }
+   ],
+   "songId": 1021
+  },
+  {
+   "squareId": 40013,
+   "squareType": 4,
+   "title": "Hey, Guess What!",
+   "effect": "Training Guts Gain +2",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 42
+    },
+    {
+     "performanceType": 4,
+     "value": 21
+    }
+   ],
+   "songId": 1011
+  },
+  {
+   "squareId": 40014,
+   "squareType": 4,
+   "title": "Sky-Blue Spring",
+   "effect": "Guts +22",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 12
+    },
+    {
+     "performanceType": 4,
+     "value": 32
+    }
+   ],
+   "songId": 1014
+  },
+  {
+   "squareId": 40015,
+   "squareType": 4,
+   "title": "Dream Sky",
+   "effect": "Wit +22",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 22
+    },
+    {
+     "performanceType": 5,
+     "value": 22
+    }
+   ],
+   "songId": 1041
+  },
+  {
+   "squareId": 40016,
+   "squareType": 4,
+   "title": "Present March♪",
+   "effect": "Power +22",
+   "cost": [
+    {
+     "performanceType": 3,
+     "value": 22
+    },
+    {
+     "performanceType": 5,
+     "value": 22
+    }
+   ],
+   "songId": 1039
+  },
+  {
+   "squareId": 40017,
+   "squareType": 4,
+   "title": "Hoppity Sunny Days♪",
+   "effect": "Training Stamina Gain +2",
+   "cost": [
+    {
+     "performanceType": 2,
+     "value": 42
+    },
+    {
+     "performanceType": 3,
+     "value": 21
+    }
+   ],
+   "songId": 1034
+  },
+  {
+   "squareId": 40018,
+   "squareType": 4,
+   "title": "Fanfare for the Future!",
+   "effect": "Guts +26",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 26
+    },
+    {
+     "performanceType": 4,
+     "value": 42
+    }
+   ],
+   "songId": 1020
+  },
+  {
+   "squareId": 40019,
+   "squareType": 4,
+   "title": "Precious Treasure Box",
+   "effect": "Speed +26",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 42
+    },
+    {
+     "performanceType": 4,
+     "value": 26
+    }
+   ],
+   "songId": 1024
+  },
+  {
+   "squareId": 40020,
+   "squareType": 4,
+   "title": "Zero Is Where the Center Stands!",
+   "effect": "Training Speed Gain +1",
+   "cost": [
+    {
+     "performanceType": 1,
+     "value": 21
+    },
+    {
+     "performanceType": 4,
+     "value": 21
+    }
+   ],
+   "songId": 1057
+  }
+ ]
+}
