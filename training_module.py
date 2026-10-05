@@ -1403,7 +1403,10 @@ def _build_live_show_embed(data: dict) -> discord.Embed | None:
 # message-edit endpoint (see plan doc decision #7). State is always persisted on
 # every POST regardless; only the visible Discord edit is skipped when too soon
 # after the last one, so the next edit that does go through is still fully caught up.
-_PROGRESS_EDIT_MIN_INTERVAL = timedelta(seconds=3)
+# 1s (down from 3s) is possible now that an edit no longer rebuilds/re-uploads the
+# images; Discord's edit limit is roughly 5 per 5s per channel, so 1s sits right at it
+# — discord.py waits and retries on a 429, so the worst case is a delayed edit.
+_PROGRESS_EDIT_MIN_INTERVAL = timedelta(seconds=1)
 _last_progress_edit: dict[int, datetime] = {}
 
 
