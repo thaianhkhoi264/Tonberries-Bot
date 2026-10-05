@@ -1102,18 +1102,17 @@ _SONG_CATALOG: dict[int, tuple[str, str, str | None, dict[str, int], str | None]
 _FREE_SONG_IDS = {1006, 1036, 1029}  # auto-granted, never shown as "not yet learned"
 _TOKEN_TO_PERFORMANCE_TYPE = {"da": 1, "pa": 2, "vo": 3, "vi": 4, "me": 5}
 
-# Turn a song's "year" tier becomes available to purchase — INFERRED, not confirmed
-# from a real capture: daftuyda.moe's "year" tags (1/2/2.5/3) line up with this bot's
-# own confirmed career calendar (Junior=13-24, Classic=25-48, Senior=49-72) and concert
-# checkpoints (24/36/48/60/72) as: Year 1 = Junior Year (available from debut, turn
-# 13), Year 2 = Classic Year's start (turn 25, right after the 1st concert), Year 2.5
-# = Classic Year's second half (turn 37, after the 2nd/mid-year concert), Year 3 =
-# Senior Year's start (turn 49, after the 3rd concert) — matches the user's own
-# estimate of "Senior-tier songs unlock after turn 48" closely (off by one turn,
-# since 48 is Classic Year's last turn and 49 is Senior Year's first). Flagging this
-# as inferred since it's not been checked against a real payload where a song's
-# availability actually flips turn to turn.
-_SONG_YEAR_UNLOCK_TURN = {"1": 13, "2": 25, "2.5": 37, "3": 49}
+# Turn a song's "year" tier (daftuyda.moe's 1/2/2.5/3 tags) first becomes purchasable.
+# Checked against the 15 captured runs in network_events.jsonl (each song's earliest
+# turn on offer in next_square_info_array, and earliest turn actually bought):
+#   Year 1   -> turn 7   (first offered at 7 in every run captured from turn 1-2, first
+#                         bought at 8-10; NOT 13 — that's debut, songs open up earlier)
+#   Year 2   -> turn 25  (first offered 25, first bought 25)
+#   Year 2.5 -> turn 37  (first bought at 37; offers were first seen in captures at 38)
+#   Year 3   -> turn 49  (first offered 49, first bought 49)
+# Within a tier, which songs actually show up on offer is a random roll of 3 squares at
+# a time, so a song can go unbought/unoffered long after its tier unlocks.
+_SONG_YEAR_UNLOCK_TURN = {"1": 7, "2": 25, "2.5": 37, "3": 49}
 
 # training_progress's `facilities[].commandId` — two overlapping ID spaces, both
 # confirmed (not guessed): 601-605 are the Live scenario's own performance-lesson
