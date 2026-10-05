@@ -1403,7 +1403,10 @@ def _build_live_show_embed(data: dict) -> discord.Embed | None:
 # message-edit endpoint (see plan doc decision #7). State is always persisted on
 # every POST regardless; only the visible Discord edit is skipped when too soon
 # after the last one, so the next edit that does go through is still fully caught up.
-_PROGRESS_EDIT_MIN_INTERVAL = timedelta(seconds=3)
+# 1s (down from 3s) is possible now that an edit no longer rebuilds/re-uploads the
+# images; Discord's edit limit is roughly 5 per 5s per channel, so 1s sits right at it
+# — discord.py waits and retries on a 429, so the worst case is a delayed edit.
+_PROGRESS_EDIT_MIN_INTERVAL = timedelta(seconds=1)
 _last_progress_edit: dict[int, datetime] = {}
 
 
@@ -1428,16 +1431,30 @@ async def _update_progress_dashboard(user_id: int, data: dict, deck_positions: l
     embeds = [embed, live_embed] if live_embed else [embed]
 
     card_id = data["cardId"]
-    files = [f for f in (
-        _thumbnail_file(card_id),
-        _dashboard_strip_file(deck_positions[:5] if deck_positions else None,
-                               deck_positions[5] if deck_positions and len(deck_positions) == 6 else None),
-    ) if f is not None]
+
+    def build_files() -> list[discord.File]:
+        return [f for f in (
+            _thumbnail_file(card_id),
+            _dashboard_strip_file(deck_positions[:5] if deck_positions else None,
+                                   deck_positions[5] if deck_positions and len(deck_positions) == 6 else None),
+        ) if f is not None]
 
     if dashboard_msg_id:
         try:
             msg = await channel.fetch_message(dashboard_msg_id)
-            await msg.edit(embeds=embeds, attachments=files)
+            # Files only referenced by an embed (attachment://...) don't show up in
+            # msg.attachments — Discord reports them via the embed's own image/thumbnail
+            # URL instead — so check there for "this card already carries its images".
+            first = msg.embeds[0] if msg.embeds else None
+            already_has_images = bool(first and (first.thumbnail.url or first.image.url))
+            if already_has_images:
+                # The thumbnail and support-card strip never change within a run, and
+                # the card was already posted with them (by training_start or an
+                # earlier training_progress) — omitting `attachments` keeps them as-is
+                # instead of re-uploading ~3 MB of PNG on every turn.
+                await msg.edit(embeds=embeds)
+            else:
+                await msg.edit(embeds=embeds, attachments=build_files())
             _last_progress_edit[user_id] = now
             return dashboard_msg_id
         except discord.NotFound:
@@ -1447,6 +1464,7 @@ async def _update_progress_dashboard(user_id: int, data: dict, deck_positions: l
             return dashboard_msg_id
 
     try:
+        files = build_files()
         msg = await (channel.send(embeds=embeds, files=files) if files else channel.send(embeds=embeds))
         _last_progress_edit[user_id] = now
         return msg.id

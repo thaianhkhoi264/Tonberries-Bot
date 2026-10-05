@@ -136,6 +136,15 @@ def build_support_card_strip(support_cards: list[dict]) -> io.BytesIO | None:
     return _render_strip(cards)
 
 
+# Rendered PNG bytes for the bare-ID strip, keyed by the ordered card IDs (friend slot
+# last, so the "Borrow" stamp position is part of the key). Rendering costs ~1.6s of
+# blocking CPU and produces a ~3 MB PNG on the Pi, and a deck rarely changes — so a
+# repeated deck (every training_progress turn, abandoned notices, the next run with the
+# same deck) reuses the bytes. In-memory only: a bot restart just costs one re-render.
+_ids_strip_cache: dict[tuple[int, ...], bytes] = {}
+_IDS_STRIP_CACHE_MAX = 8
+
+
 def build_support_card_ids_strip(support_card_ids: list[int] | None,
                                   friend_support_card_id: int | None) -> io.BytesIO | None:
     """training_start version: bare IDs only, friend slot always last — no LB stamps."""
@@ -144,4 +153,12 @@ def build_support_card_ids_strip(support_card_ids: list[int] | None,
         ids.append(friend_support_card_id)
     if not ids:
         return None
-    return _render_strip([{"supportCardId": sid} for sid in ids])
+
+    key = tuple(ids)
+    data = _ids_strip_cache.get(key)
+    if data is None:
+        data = _render_strip([{"supportCardId": sid} for sid in ids]).getvalue()
+        if len(_ids_strip_cache) >= _IDS_STRIP_CACHE_MAX:
+            _ids_strip_cache.pop(next(iter(_ids_strip_cache)))  # oldest entry
+        _ids_strip_cache[key] = data
+    return io.BytesIO(data)  # fresh buffer each call — discord.File consumes it
