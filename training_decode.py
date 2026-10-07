@@ -27,6 +27,7 @@ from global_config import (
     TRAINING_CHARACTER_NAMES_JSON,
     TRAINING_CHAIN_PROGRESS_JSON,
     TRAINING_LIVE_SQUARES_JSON,
+    TRAINING_CARD_DRESS_IDS_JSON,
     SKILL_NAMES_JSON,
     UMA_TOOLS_CHARA_ICON_DIR,
     UMA_TOOLS_BUILD_PLANNER_CARDS_JSON,
@@ -340,10 +341,19 @@ def character_display(card_id: int) -> dict:
     return {"name": name, "outfit": outfit_label, "resolved": True}
 
 
+def card_dress_id(card_id: int) -> int:
+    """The outfit dressId uma-tools uses in its icon filenames. Usually equals the cardId,
+    but not always (Curren Chan (Wedding): card 103802 -> dress 103826) — see
+    tests/extract_card_dress_ids.py. Falls back to the cardId for a card newer than
+    card_dress_ids.json, which is right for the majority of cards."""
+    return _load(TRAINING_CARD_DRESS_IDS_JSON).get(str(card_id), card_id)
+
+
 def character_icon_path(card_id: int) -> Optional[str]:
     """Full path to the trained-character portrait PNG for a cardId, or None if missing."""
     base_id, _outfit_index = decode_card_id(card_id)
-    path = os.path.join(UMA_TOOLS_CHARA_ICON_DIR, f"trained_chr_icon_{base_id}_{card_id}_02.png")
+    path = os.path.join(UMA_TOOLS_CHARA_ICON_DIR,
+                        f"trained_chr_icon_{base_id}_{card_dress_id(card_id)}_02.png")
     return path if os.path.exists(path) else None
 
 
