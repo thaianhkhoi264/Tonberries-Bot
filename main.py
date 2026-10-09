@@ -40,6 +40,46 @@ _HITLIST_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ---------------------------------------------------------------------------
+# Thank-you replies (DMs)
+# ---------------------------------------------------------------------------
+
+# "thank", "thanks", "thank you", "ty", "tysm", "thx"... as whole words. Only
+# consulted after every real command has been matched, so e.g. `auto thank you
+# note` or `skill Thanks` never reach it.
+_THANKS_RE = re.compile(r"\b(?:thank\w*|ty|tysm|tyvm|thx|thnx)\b", re.IGNORECASE)
+
+_THANKS_REPLIES = [
+    "You're very welcome! ♪",
+    "You're welcome, Trainer! <a:diapat:1508665594013286400>",
+    "Anytime! I'm happy to help. ♪",
+    "Hehe, you're welcome! <a:dianod:1508662343322697839>",
+    "It's my pleasure!",
+    "Of course! Let's keep shining together!",
+    "No need to thank me — I'm glad I could help! ♪",
+    "You're welcome! Good luck with your training! <a:diapat:1508665594013286400>",
+    "Happy to help, Trainer!",
+    "My pleasure! Please let me know if you need anything else. ♪",
+    "Hehe, thank you for saying so!",
+    "You're most welcome!",
+    "It was no trouble at all! <a:dianod:1508662343322697839>",
+    "I'm glad I could be of help! ♪",
+    "Anytime! Do your best out there!",
+]
+_last_thanks_reply: str | None = None
+
+
+def _is_thanks(text: str) -> bool:
+    return _THANKS_RE.search(text) is not None
+
+
+async def _reply_thanks(message: discord.Message) -> None:
+    """Send a random 'you're welcome', never the same one twice in a row."""
+    global _last_thanks_reply
+    choices = [r for r in _THANKS_REPLIES if r != _last_thanks_reply]
+    _last_thanks_reply = random.choice(choices)
+    await message.channel.send(_last_thanks_reply)
+
 
 # ---------------------------------------------------------------------------
 # Slash commands
@@ -293,8 +333,13 @@ async def on_message(message: discord.Message):
         # No pending training_end confirmation for this user — fall through
         # (owner-only handling / "not supported" reply below) as normal.
 
-    # Everything below is owner-only — send a helpful reply to everyone else
+    # Everything below is owner-only — send a helpful reply to everyone else.
+    # A thank-you that isn't a command gets a friendly reply instead of the
+    # "not supported" message (owners hit the same check at the end of the chain).
     if message.author.id not in OWNER_USER_IDS:
+        if _is_thanks(cmd):
+            await _reply_thanks(message)
+            return
         await message.channel.send(
             "Hello! I'm afraid I don't understand that one. Try `auto` to start an Independent Training reminder! <a:dianod:1508662343322697839>"
         )
@@ -342,7 +387,9 @@ async def on_message(message: discord.Message):
         await skills_module.handle_skill_lookup(message, cmd[len("skill "):])
     elif cmd_lower.startswith("send "):
         await _cmd_send(message, cmd[len("send "):])
-    # Unknown commands are silently ignored
+    elif _is_thanks(cmd):
+        await _reply_thanks(message)
+    # Other unknown commands are silently ignored
 
 
 # ---------------------------------------------------------------------------
