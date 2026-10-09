@@ -390,7 +390,7 @@ async def handle_skill_interaction(
 
     name = name.strip()
     if not name:
-        await interaction.followup.send("Please provide a skill name.")
+        await interaction.followup.send("Which skill would you like to look up, Trainer?")
         return
 
     # --- Find skill in uma-skill-tools data ---
@@ -407,25 +407,25 @@ async def handle_skill_interaction(
         # Fall back: uma data missing or skill not found — try skills.db only
         if not os.path.exists(SKILLS_DB):
             await interaction.followup.send(
-                f"No skill found for **{name}**.\n"
-                "Skills database not synced yet \u2014 try `skill sync` first."
+                f"I couldn't find a skill for **{name}**...\n"
+                "The skills database hasn't been synced yet \u2014 please try `skill sync` first."
             )
             return
         rows = await _search_skills(name, limit=MAX_RESULTS_LIST + 1)
         if not rows:
-            await interaction.followup.send(f"No skill found matching **{name}**.")
+            await interaction.followup.send(f"I couldn't find a skill matching **{name}**... Might it be spelled a little differently?")
             return
         if len(rows) > MAX_RESULTS_LIST:
             await interaction.followup.send(
-                f"Found more than {MAX_RESULTS_LIST} skills matching **{name}** \u2014 "
-                "please be more specific."
+                f"I found more than {MAX_RESULTS_LIST} skills matching **{name}** \u2014 "
+                "could you be a little more specific?"
             )
             return
         if len(rows) > 1:
             lines = [f"{i+1}. {r['name']}" for i, r in enumerate(rows)]
             await interaction.followup.send(
-                f"Multiple skills match **{name}**:\n" + "\n".join(lines)
-                + "\n\nUse the full name to get details."
+                f"Several skills match **{name}**:\n" + "\n".join(lines)
+                + "\n\nPlease use the full name to see the details!"
             )
             return
         embed = _build_gametora_embed(rows[0])
@@ -523,28 +523,28 @@ async def handle_skill_lookup(message: discord.Message, query: str) -> None:
     """Entry point called from main.py for DM `skill <name>` command."""
     query = query.strip()
     if not query:
-        await message.channel.send("Usage: `skill <name>` \u2014 e.g. `skill Red Shift`")
+        await message.channel.send("Like this, please: `skill <name>` \u2014 e.g. `skill Red Shift`")
         return
 
     if not os.path.exists(SKILLS_DB):
-        await message.channel.send("Skills database not found. Run `skill refresh` first.")
+        await message.channel.send("I can't find the skills database... Please run `skill refresh` first.")
         return
 
     results = await _search_skills(query)
     if not results:
-        await message.channel.send(f"No skill found matching **{query}**.")
+        await message.channel.send(f"I couldn't find a skill matching **{query}**... Might it be spelled a little differently?")
         return
     if len(results) > MAX_RESULTS_LIST:
         await message.channel.send(
-            f"Found more than {MAX_RESULTS_LIST} skills matching **{query}** \u2014 "
-            "please be more specific."
+            f"I found more than {MAX_RESULTS_LIST} skills matching **{query}** \u2014 "
+            "could you be a little more specific?"
         )
         return
     if len(results) > 1:
         lines = [f"{i+1}. {r['name']}" for i, r in enumerate(results)]
         await message.channel.send(
-            f"Multiple skills match **{query}**:\n" + "\n".join(lines)
-            + "\n\nType the full name to get details."
+            f"Several skills match **{query}**:\n" + "\n".join(lines)
+            + "\n\nPlease type the full name to see the details!"
         )
         return
 

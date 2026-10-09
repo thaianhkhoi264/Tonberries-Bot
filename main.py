@@ -251,7 +251,7 @@ async def _send_restart_dm() -> None:
         commit = "unavailable"
     try:
         user = await bot.fetch_user(MAIN_OWNER_ID)
-        await user.send(f"Bot restarted.\nLatest commit: `{commit}`")
+        await user.send(f"I'm back! ♪\nLatest commit: `{commit}`")
     except Exception as exc:
         logger.error(f"[Bot] Failed to send restart DM: {exc}")
 
@@ -296,7 +296,7 @@ async def on_message(message: discord.Message):
     # Everything below is owner-only — send a helpful reply to everyone else
     if message.author.id not in OWNER_USER_IDS:
         await message.channel.send(
-            "Hello! Whatever you're typing is not supported, use `auto` to start an Independent Training reminder. <a:dianod:1508662343322697839>"
+            "Hello! I'm afraid I don't understand that one. Try `auto` to start an Independent Training reminder! <a:dianod:1508662343322697839>"
         )
         return
 
@@ -378,13 +378,13 @@ async def _cmd_help(message: discord.Message):
 
 
 async def _cmd_refresh(message: discord.Message):
-    await message.channel.send("Refreshing dashboards…")
+    await message.channel.send("On it! Refreshing the dashboards…")
     try:
         await uma_module.uma_update_timers(force_update=True)
-        await message.channel.send("Dashboards refreshed.")
+        await message.channel.send("The dashboards are refreshed! ♪")
     except Exception as exc:
         logger.error(f"[Bot] Refresh failed: {exc}")
-        await message.channel.send(f"Refresh failed: {exc}")
+        await message.channel.send(f"Sorry, the refresh failed: {exc}")
 
 
 async def _cmd_pending(message: discord.Message):
@@ -399,30 +399,30 @@ async def _cmd_pending(message: discord.Message):
                 await message.channel.send(chunk)
     except Exception as exc:
         logger.error(f"[Bot] Pending command failed: {exc}")
-        await message.channel.send(f"Error fetching pending notifications: {exc}")
+        await message.channel.send(f"Sorry, I couldn't fetch the pending notifications: {exc}")
 
 
 async def _cmd_shutdown(message: discord.Message):
-    await message.channel.send("Shutting down. Use `sudo systemctl start tonberries-bot` to bring me back.")
+    await message.channel.send("Time for a rest... Use `sudo systemctl start tonberries-bot` to bring me back.")
     logger.info("[Bot] Shutdown requested by owner")
     await bot.close()
     sys.exit(0)  # Exit code 0 — systemd Restart=on-failure will NOT restart
 
 
 async def _cmd_report(message: discord.Message):
-    await message.channel.send("Building fan report…")
+    await message.channel.send("Putting the fan report together…")
     try:
         await circles_module.send_daily_report([message.author.id])
-        await message.channel.send("Report sent.")
+        await message.channel.send("The report is on its way! ♪")
     except Exception as exc:
         logger.error(f"[Bot] Report failed: {exc}")
-        await message.channel.send(f"Report failed: {exc}")
+        await message.channel.send(f"Hm, the report didn't go through: {exc}")
 
 
 async def _cmd_shaming(message: discord.Message, enable: bool) -> None:
     await circles_module.set_shaming_enabled(enable)
     state = "on" if enable else "off"
-    await message.channel.send(f"Public shaming turned **{state}**.")
+    await message.channel.send(f"Understood! Public shaming is now **{state}**.")
 
 
 async def _cmd_fancount(message: discord.Message, args: str = "") -> None:
@@ -448,39 +448,39 @@ async def _cmd_fancount(message: discord.Message, args: str = "") -> None:
 
     parts = args.split()
     if parts[0].lower() != "edit" or len(parts) < 2:
-        await message.channel.send("Usage: `fancount` or `fancount edit <number>`")
+        await message.channel.send("Like this, please: `fancount` or `fancount edit <number>`")
         return
 
     try:
         new_val = int(parts[1].replace(",", "").replace("_", ""))
     except ValueError:
-        await message.channel.send(f"Invalid number: `{parts[1]}`")
+        await message.channel.send(f"Hm, `{parts[1]}` doesn't look like a number to me...")
         return
 
     if new_val <= 0:
-        await message.channel.send("Fan requirement must be a positive number.")
+        await message.channel.send("The fan requirement has to be a positive number, please.")
         return
 
     await circles_module.set_monthly_requirement(new_val, message.author.id)
     await message.channel.send(
-        f"Monthly fan requirement updated to **{new_val:,}**. Refreshing club display…"
+        f"Got it! The monthly fan requirement is now **{new_val:,}**. Refreshing the club display…"
     )
     try:
         await circles_module.post_or_edit(force=True)
-        await message.channel.send("Club display refreshed.")
+        await message.channel.send("The club display is refreshed! ♪")
     except Exception as exc:
         logger.error(f"[Bot] Fancount refresh failed: {exc}")
-        await message.channel.send(f"Refresh failed: {exc}")
+        await message.channel.send(f"Sorry, the refresh failed: {exc}")
 
 
 async def _cmd_circles(message: discord.Message):
-    await message.channel.send("Fetching from uma.moe API…")
+    await message.channel.send("Fetching from uma.moe…")
     try:
         await circles_module.post_or_edit(force=True)
-        await message.channel.send("Circle stats refreshed.")
+        await message.channel.send("The circle stats are refreshed! ♪")
     except Exception as exc:
         logger.error(f"[Bot] Circles refresh failed: {exc}")
-        await message.channel.send(f"Circle refresh failed: {exc}")
+        await message.channel.send(f"Hm, the circle refresh didn't work: {exc}")
 
 
 async def _cmd_circle_run(message: discord.Message, arg: str = ""):
@@ -497,28 +497,28 @@ async def _cmd_circle_run(message: discord.Message, arg: str = ""):
 
     game_day = arg or circles_module.slot_game_day()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", game_day):
-        await message.channel.send("Date must be `YYYY-MM-DD`.")
+        await message.channel.send("The date should look like `YYYY-MM-DD`, please.")
         return
 
-    await message.channel.send(f"Firing the daily circle update for game-day **{game_day}**…")
+    await message.channel.send(f"Starting the daily circle update for game-day **{game_day}**…")
     try:
         ok = await circles_module.run_daily_update(force=True, game_day=game_day)
         await message.channel.send(
-            "Done." if ok else "uma.moe was unreachable — nothing sent. Try again shortly."
+            "All done! ♪" if ok else "uma.moe couldn't be reached, so nothing was sent... Let's try again shortly."
         )
     except Exception as exc:
         logger.error(f"[Bot] circle run failed: {exc}")
-        await message.channel.send(f"Daily update failed: {exc}")
+        await message.channel.send(f"Sorry, the daily update failed: {exc}")
 
 
 async def _cmd_parent_refresh(message: discord.Message):
-    await message.channel.send("Scraping GT global character list (this may take ~30 seconds)…")
+    await message.channel.send("Scraping the GameTora character list... this may take about 30 seconds!")
     try:
         result = await parent_module.refresh_char_ids()
         await message.channel.send(result)
     except Exception as exc:
         logger.error(f"[Bot] Parent refresh failed: {exc}")
-        await message.channel.send(f"Parent refresh failed: {exc}")
+        await message.channel.send(f"Hm, the parent refresh didn't work: {exc}")
 
 
 async def _cmd_trainee_refresh(message: discord.Message):
@@ -526,8 +526,8 @@ async def _cmd_trainee_refresh(message: discord.Message):
         await message.channel.send("No.")
         return
     await message.channel.send(
-        "Refreshing trainee data — umamusu.wiki scrape → Fandom gap-fill → image "
-        "normalize. This takes ~10 minutes; I'll post each stage."
+        "Refreshing the trainee data — umamusu.wiki scrape → Fandom gap-fill → image "
+        "normalize. This takes about 10 minutes; I'll post each stage!"
     )
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -549,11 +549,11 @@ async def _cmd_trainee_refresh(message: discord.Message):
         if rc != 0:
             err = "\n".join(tail[-25:])
             await message.channel.send(
-                f"Trainee refresh failed (exit {rc}):\n```\n{err}\n```"
+                f"Sorry, the trainee refresh failed (exit {rc}):\n```\n{err}\n```"
             )
     except Exception as exc:
         logger.error(f"[Bot] Trainee refresh error: {exc}")
-        await message.channel.send(f"Trainee refresh error: {exc}")
+        await message.channel.send(f"Sorry, the trainee refresh hit an error: {exc}")
 
 
 async def _cmd_role_cleanup(message: discord.Message, force: bool = False):
@@ -562,14 +562,14 @@ async def _cmd_role_cleanup(message: discord.Message, force: bool = False):
         return
     guild = bot.get_guild(MAIN_SERVER_ID)
     if guild is None:
-        await message.channel.send("Tonberries server not in cache.")
+        await message.channel.send("I can't find the Tonberries server in my cache...")
         return
     names, skip = await role_module.cleanup_empty_fan_roles(guild, dry_run=not force)
     if skip:
-        await message.channel.send(f"Cleanup can't run — {skip}")
+        await message.channel.send(f"I can't run the cleanup — {skip}")
         return
     if not names:
-        await message.channel.send("No empty fan roles right now.")
+        await message.channel.send("There are no empty fan roles right now!")
         return
 
     shown = names[:40]
@@ -577,11 +577,11 @@ async def _cmd_role_cleanup(message: discord.Message, force: bool = False):
     if len(names) > len(shown):
         listing += f"\n…and {len(names) - len(shown)} more"
     if force:
-        await message.channel.send(f"Deleted {len(names)} empty fan role(s):\n{listing}")
+        await message.channel.send(f"I deleted {len(names)} empty fan role(s):\n{listing}")
     else:
         await message.channel.send(
-            f"{len(names)} empty fan role(s) would be deleted (auto-runs daily "
-            f"17:30 UTC; `role cleanup now` to do it now):\n{listing}"
+            f"{len(names)} empty fan role(s) would be deleted (this runs daily "
+            f"at 17:30 UTC; use `role cleanup now` to do it now):\n{listing}"
         )
 
 
@@ -600,11 +600,11 @@ async def _cmd_render_monthly(message: discord.Message):
         )
     except Exception as exc:
         logger.error(f"[Bot] render monthly failed: {exc}")
-        await message.channel.send(f"Render failed: {exc}")
+        await message.channel.send(f"Sorry, the render failed: {exc}")
 
 
 async def _cmd_skill_refresh(message: discord.Message):
-    await message.channel.send("Running skills scraper (this takes several minutes)…")
+    await message.channel.send("Running the skills scraper... this takes several minutes!")
     try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "skills_scraper.py",
@@ -616,23 +616,23 @@ async def _cmd_skill_refresh(message: discord.Message):
             err = stderr.decode(errors="replace")[-1500:]
             logger.error(f"[Bot] Skills scraper failed: {err}")
             await message.channel.send(
-                f"Skills scraper failed (exit {proc.returncode}):\n```\n{err}\n```"
+                f"Sorry, the skills scraper failed (exit {proc.returncode}):\n```\n{err}\n```"
             )
         else:
-            await message.channel.send("Skills database refreshed.")
+            await message.channel.send("The skills database is refreshed! ♪")
     except Exception as exc:
         logger.error(f"[Bot] Skills scraper error: {exc}")
-        await message.channel.send(f"Skills scraper error: {exc}")
+        await message.channel.send(f"Hm, the skills scraper hit an error: {exc}")
 
 
 async def _cmd_skill_sync(message: discord.Message):
-    await message.channel.send("Syncing uma-skill-tools data from GitHub…")
+    await message.channel.send("Syncing the uma-skill-tools data from GitHub…")
     try:
         result = await skill_sync.sync_now(bot)
         await message.channel.send(result)
     except Exception as exc:
         logger.error(f"[Bot] Skill sync failed: {exc}")
-        await message.channel.send(f"Skill sync failed: {exc}")
+        await message.channel.send(f"Hm, the skill sync didn't work: {exc}")
 
 
 async def _cmd_send(message: discord.Message, args: str) -> None:
@@ -641,31 +641,31 @@ async def _cmd_send(message: discord.Message, args: str) -> None:
         return
     parts = args.split(" ", 1)
     if len(parts) < 2:
-        await message.channel.send("Usage: `send [channel_id] [message]`")
+        await message.channel.send("Like this, please: `send [channel_id] [message]`")
         return
     try:
         channel_id = int(parts[0])
     except ValueError:
-        await message.channel.send(f"Invalid channel ID: `{parts[0]}`")
+        await message.channel.send(f"Hm, `{parts[0]}` isn't a valid channel ID...")
         return
     channel = bot.get_channel(channel_id)
     if channel is None:
-        await message.channel.send(f"Channel `{channel_id}` not found.")
+        await message.channel.send(f"I couldn't find channel `{channel_id}`...")
         return
     await channel.send(parts[1])
-    await message.channel.send(f"Sent to <#{channel_id}>.")
+    await message.channel.send(f"Sent to <#{channel_id}>!")
 
 
 async def _cmd_restart(message: discord.Message):
     import subprocess
-    await message.channel.send("Pulling latest changes…")
+    await message.channel.send("Fetching the latest changes…")
     try:
         result = subprocess.run(
             ["git", "-C", "/home/piberry/Tonberries-Bot", "pull"],
             capture_output=True, text=True
         )
         out = (result.stdout + result.stderr).strip()
-        await message.channel.send(f"```\n{out}\n```\nRestarting…")
+        await message.channel.send(f"```\n{out}\n```\nBack in a moment!")
         logger.info(f"[Bot] git pull: {out}")
     except Exception as exc:
         await message.channel.send(f"git pull failed: {exc}\nRestarting anyway…")
@@ -686,7 +686,7 @@ async def _handle_guild_message(message: discord.Message) -> None:
         return
 
     if message.author.id != MAIN_OWNER_ID:
-        await message.channel.send(random.choice(["No.", "Nope.", "Nuh Uh", "Don't even think about it.", "<a:diashake:1508662342060081253>"]))
+        await message.channel.send(random.choice(["I'm afraid not.", "Nope!", "Nuh uh!", "Don't even think about it.", "<a:diashake:1508662342060081253>"]))
         return
 
     name   = m.group(1).strip()
@@ -707,10 +707,10 @@ async def _handle_guild_message(message: discord.Message) -> None:
     # Add to the live hitlist embed and refresh the channel display
     circles_module.add_manual_hitlist_entry(name, reason)
 
-    reply = f"**{name}** have been added to the Hitlist"
+    reply = f"**{name}** has been added to the Hitlist"
     if reason:
         reply += f" for {reason}"
-    reply += "!"
+    reply += "! Oh dear..."
     await message.channel.send(reply)
 
     await circles_module.refresh_hitlist_embed()

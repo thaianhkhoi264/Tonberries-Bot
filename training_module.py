@@ -304,8 +304,8 @@ _DASHBOARD_HEADER_TEXT = (
     "# Training Dashboard\n\n"
     "This channel shows live training status. When a run starts, a card appears here with "
     "the character and current progress. Once the run finishes, the card is removed and the "
-    "result gets posted to the manual or independent results channel.\n\n"
-    "For Independent Training, you also get a ping here once the 50 minute timer ends."
+    "result is posted to the manual or independent results channel!\n\n"
+    "For Independent Training, I'll also ping you here once the 50 minute timer ends. ♪"
 )
 
 
@@ -443,10 +443,10 @@ def _dashboard_embed(user_id: int, mode: str, card_id: int, ends_at: datetime | 
         status = "Ready to collect! Log in to finish the run. <a:diapat:1508665594013286400>"
         colour = discord.Colour.gold()
     elif mode == "independent" and ends_at:
-        status = f"Independent Training ongoing — ready <t:{int(ends_at.timestamp())}:R>"
+        status = f"Independent Training is underway — ready <t:{int(ends_at.timestamp())}:R>!"
         colour = discord.Colour.blurple()
     else:
-        status = "Manual Training ongoing — waiting for it to end"
+        status = "Manual Training is underway — I'll wait for it to end!"
         colour = discord.Colour.blurple()
 
     embed = discord.Embed(title=title, description=status, colour=colour)
@@ -544,7 +544,7 @@ async def _run_notification_timer(user_id: int, mode: str, card_id: int, ends_at
     if channel is not None:
         try:
             ping_msg = await channel.send(
-                f"<@{user_id}> Independent Training has ended — log in to collect the result!"
+                f"<@{user_id}> Your Independent Training has ended! Please log in to collect the result! ♪"
             )
             async with aiosqlite.connect(LOCAL_DB) as conn:
                 await _set_ready_notification(conn, user_id, ping_msg.id)
@@ -798,9 +798,9 @@ async def _request_confirmation(user_id: int, data: dict) -> None:
         user = await bot.fetch_user(user_id)
         dm = await user.create_dm()
         msg = await dm.send(
-            f"I got a training_end for **{name}** with no matching training_start on record — "
-            "I can't tell if this was a manual or independent training.\n"
-            "Reply `manual`, `independent`, or `cancel` here."
+            f"Hm... I got a training_end for **{name}** with no matching training_start on record, "
+            "so I can't tell if this was a manual or independent training.\n"
+            "Could you reply `manual`, `independent`, or `cancel` here, please?"
         )
     except Exception as exc:
         logger.error(f"[Training] Could not DM user {user_id} for confirmation: {exc}")
@@ -1043,15 +1043,15 @@ async def handle_confirmation_reply(message: discord.Message) -> bool:
     cmd = message.content.strip().lower()
     if cmd == "cancel":
         await _cancel_pending_confirmation(user_id)
-        await message.channel.send("Cancelled — that training_end will be discarded.")
+        await message.channel.send("Understood — I'll discard that training_end.")
         return True
     elif cmd in ("manual", "independent"):
         await _cancel_pending_confirmation(user_id)
         await _finish_training_end(user_id, cmd, pending["payload"])
-        await message.channel.send(f"Got it — posted as a {cmd} training result.")
+        await message.channel.send(f"Got it! I posted it as a {cmd} training result. ♪")
         return True
     else:
-        await message.channel.send("Reply `manual`, `independent`, or `cancel` for the training_end I asked about.")
+        await message.channel.send("Please reply `manual`, `independent`, or `cancel` for the training_end I asked about.")
         return True
 
 

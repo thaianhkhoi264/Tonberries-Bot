@@ -531,7 +531,7 @@ def _guild_ok(interaction: discord.Interaction) -> bool:
 async def handle_role(interaction: discord.Interaction, text: str) -> None:
     if not _guild_ok(interaction):
         await interaction.response.send_message(
-            "This command only works in the Tonberries server.", ephemeral=True
+            "I'm afraid this command only works in the Tonberries server.", ephemeral=True
         )
         return
 
@@ -540,14 +540,14 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
     guild = interaction.guild
     member = interaction.user
     if guild is None or not isinstance(member, discord.Member):
-        await interaction.followup.send("Could not resolve your membership.", ephemeral=True)
+        await interaction.followup.send("Hm, I couldn't work out your membership...", ephemeral=True)
         return
 
     resolved = _resolve_character(text)
     if resolved is None:
         await interaction.followup.send(
-            f"**{text}** doesn't match a known trainee. Pick a name from the "
-            f"autocomplete list (character data comes from the wiki scrape).",
+            f"Hm, **{text}** doesn't match any trainee I know. Please pick a name from the "
+            f"autocomplete list!",
             ephemeral=True,
         )
         return
@@ -557,7 +557,7 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
 
     if not guild.me.guild_permissions.manage_roles:
         await interaction.followup.send(
-            "I don't have the **Manage Roles** permission here.", ephemeral=True
+            "I'm afraid I don't have the **Manage Roles** permission here...", ephemeral=True
         )
         return
 
@@ -586,13 +586,13 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
                 bot_created = True
             except discord.Forbidden:
                 await interaction.followup.send(
-                    "I couldn't create the role (missing permission).", ephemeral=True
+                    "Oh dear... I couldn't create the role (missing permission).", ephemeral=True
                 )
                 return
             except discord.HTTPException as exc:
                 logger.error(f"[Role] create_role failed for {role_name!r}: {exc}")
                 await interaction.followup.send(
-                    f"Failed to create the role: {exc}", ephemeral=True
+                    f"Sorry, I couldn't create the role: {exc}", ephemeral=True
                 )
                 return
 
@@ -603,15 +603,15 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
                 await _track_assignment(conn, guild.id, member.id, role.id)
                 await conn.commit()
                 await interaction.followup.send(
-                    f"You already have **{role.name}**.", ephemeral=True
+                    f"You already have **{role.name}**, Trainer!", ephemeral=True
                 )
                 return
 
             if role >= guild.me.top_role:
                 await conn.commit()
                 await interaction.followup.send(
-                    f"**{role.name}** exists but sits above my highest role, so I "
-                    f"can't assign it. Ask an admin to move it down.",
+                    f"**{role.name}** sits above my highest role, so I "
+                    f"can't assign it... Could you ask an admin to move it down, please?",
                     ephemeral=True,
                 )
                 return
@@ -628,7 +628,7 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
                     await _untrack_assignment(conn, guild.id, member.id, oldest.id)
                     evicted_note = (
                         f" You were at the {MAX_FAN_ROLES}-role limit, so I removed "
-                        f"**{oldest.name}**."
+                        f"**{oldest.name}** to make room."
                     )
                 except discord.Forbidden:
                     evicted_note = (
@@ -641,7 +641,7 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
             except discord.Forbidden:
                 await conn.commit()
                 await interaction.followup.send(
-                    f"I couldn't give you **{role.name}** (role hierarchy).",
+                    f"I'm sorry, I couldn't give you **{role.name}** (role hierarchy).",
                     ephemeral=True,
                 )
                 return
@@ -649,8 +649,12 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
             await _track_assignment(conn, guild.id, member.id, role.id)
             await conn.commit()
 
-    verb = "Created and gave you" if bot_created else "Gave you"
-    await interaction.followup.send(f"{verb} **{role.name}**.{evicted_note}", ephemeral=True)
+    verb = (
+        f"I created **{role.name}** and gave it to you! ♪"
+        if bot_created
+        else f"Here you go — **{role.name}** is yours! ♪"
+    )
+    await interaction.followup.send(f"{verb}{evicted_note}", ephemeral=True)
     logger.info(
         f"[Role] {member} ({member.id}) -> {role.name} "
         f"({'created' if bot_created else 'reused'} {role.id}){evicted_note}"
@@ -664,7 +668,7 @@ async def handle_role(interaction: discord.Interaction, text: str) -> None:
 async def handle_removerole(interaction: discord.Interaction, text: str) -> None:
     if not _guild_ok(interaction):
         await interaction.response.send_message(
-            "This command only works in the Tonberries server.", ephemeral=True
+            "I'm afraid this command only works in the Tonberries server.", ephemeral=True
         )
         return
 
@@ -673,7 +677,7 @@ async def handle_removerole(interaction: discord.Interaction, text: str) -> None
     guild = interaction.guild
     member = interaction.user
     if guild is None or not isinstance(member, discord.Member):
-        await interaction.followup.send("Could not resolve your membership.", ephemeral=True)
+        await interaction.followup.send("Hm, I couldn't work out your membership...", ephemeral=True)
         return
 
     resolved = _resolve_character(text)
@@ -691,7 +695,7 @@ async def handle_removerole(interaction: discord.Interaction, text: str) -> None
 
     if role is None:
         await interaction.followup.send(
-            f"You are not a **{text}**.", ephemeral=True
+            f"Hm, you don't have **{text}**.", ephemeral=True
         )
         return
 
@@ -699,7 +703,7 @@ async def handle_removerole(interaction: discord.Interaction, text: str) -> None
         await member.remove_roles(role, reason="/removerole command")
     except discord.Forbidden:
         await interaction.followup.send(
-            f"I couldn't remove **{role.name}** (role hierarchy).", ephemeral=True
+            f"I'm sorry, I couldn't remove **{role.name}** (role hierarchy).", ephemeral=True
         )
         return
 
@@ -707,5 +711,5 @@ async def handle_removerole(interaction: discord.Interaction, text: str) -> None
         await _untrack_assignment(conn, guild.id, member.id, role.id)
         await conn.commit()
 
-    await interaction.followup.send(f"Removed **{role.name}**.", ephemeral=True)
+    await interaction.followup.send(f"Done! I removed **{role.name}**.", ephemeral=True)
     logger.info(f"[Role] {member} ({member.id}) removed {role.name} ({role.id})")

@@ -471,7 +471,7 @@ def _member_status(gained: int) -> MemberStatus:
             category="goal_met",
             emoji=STATUS_EMOJIS["goal_met"],
             color=STATUS_COLORS["goal_met"],
-            line=f"Monthly goal reached — {over:,} ahead of target",
+            line=f"Monthly goal reached — {over:,} ahead of target! Wonderful!",
         )
 
     if gained >= expected_today:
@@ -480,7 +480,7 @@ def _member_status(gained: int) -> MemberStatus:
             category="on_track",
             emoji=STATUS_EMOJIS["on_track"],
             color=STATUS_COLORS["on_track"],
-            line=f"On track — {remaining:,} more fans to finish the month",
+            line=f"On track! {remaining:,} more fans to finish the month.",
         )
 
     remaining = monthly_target - gained
@@ -495,20 +495,20 @@ def _member_status(gained: int) -> MemberStatus:
                 category="far_behind",
                 emoji=STATUS_EMOJIS["far_behind"],
                 color=STATUS_COLORS["far_behind"],
-                line=f"Very behind — {details}",
+                line=f"Oh dear... very behind — {details}",
             )
         return MemberStatus(
             category="behind",
             emoji=STATUS_EMOJIS["behind"],
             color=STATUS_COLORS["behind"],
-            line=f"Behind — {details}",
+            line=f"A little behind — {details}. Let's catch up!",
         )
 
     return MemberStatus(
         category="far_behind",
         emoji=STATUS_EMOJIS["far_behind"],
         color=STATUS_COLORS["far_behind"],
-        line=f"Month ended — {remaining:,} short of the monthly goal",
+        line=f"The month has ended, and we're {remaining:,} short of the goal... A lesson for next time.",
     )
 
 
@@ -710,7 +710,7 @@ def _build_report_embed(members: list[dict], snapshots: dict) -> discord.Embed:
             embed,
             "Month just rolled over ⏳",
             [f"**{n}**" for n in pending]
-            + ["_Daily totals reset — gains will show in the next report._"],
+            + ["_The daily totals have reset — gains will show in the next report!_"],
         )
 
     return embed
@@ -740,7 +740,7 @@ def _build_watchlist_embed(entries: list[dict]) -> discord.Embed:
         colour=STATUS_COLORS["behind"],
     )
     lines = _build_list_lines(entries)
-    embed.description = "\n".join(lines) if lines else "*Nobody here — great work!*"
+    embed.description = "\n".join(lines) if lines else "*Nobody here — wonderful work, everyone!* ♪"
     return embed
 
 
@@ -755,7 +755,7 @@ def _build_hitlist_embed(entries: list[dict]) -> discord.Embed:
     ]
     stat_lines   = _build_list_lines(entries)
     all_lines    = manual_lines + stat_lines
-    embed.description = "\n".join(all_lines) if all_lines else "*Nobody here — great work!*"
+    embed.description = "\n".join(all_lines) if all_lines else "*Nobody here — wonderful work, everyone!* ♪"
     return embed
 
 

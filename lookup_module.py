@@ -338,7 +338,7 @@ async def handle_whenis(interaction: discord.Interaction, query: str) -> None:
 
     query = query.strip()
     if not query:
-        await interaction.followup.send("Please provide a card or character name.", ephemeral=True)
+        await interaction.followup.send("Which card or character would you like to look up, Trainer?", ephemeral=True)
         return
 
     # Exact name match (autocomplete delivers full name as value; also handle free-text)
@@ -348,7 +348,7 @@ async def handle_whenis(interaction: discord.Interaction, query: str) -> None:
         # Fall back to first fuzzy match if user typed a partial name manually
         exact = cards[:1]
     if not exact:
-        await interaction.followup.send(f"No card found matching **{query}**.", ephemeral=True)
+        await interaction.followup.send(f"I couldn't find a card matching **{query}**... Might it be spelled a little differently?", ephemeral=True)
         return
 
     # Deduplicate by card_id (keep first occurrence per ID)
@@ -392,9 +392,9 @@ async def handle_whenis(interaction: discord.Interaction, query: str) -> None:
         if i < len(DIGIT_EMOJIS)
     )
     content = (
-        f"Multiple versions of **{query}** found in banners:\n"
+        f"There are several versions of **{query}** in the banners:\n"
         f"{lines}\n"
-        f"React to pick one."
+        f"Please react to pick one!"
     )
 
     if img_bytes:

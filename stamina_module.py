@@ -373,7 +373,7 @@ async def handle_stamina_interaction(
 
     if not _data_loaded:
         await interaction.followup.send(
-            "Skill data is not yet loaded — please try again in a moment.",
+            "I'm still loading the skill data — please try again in a moment!",
             ephemeral=True,
         )
         return
@@ -390,7 +390,7 @@ async def handle_stamina_interaction(
     course_id, course_display = cm_module.resolve_course(course or "", distance)
     if not course_id:
         await interaction.followup.send(
-            "Could not resolve a course for that selection. The CM may not be in the timeline yet.",
+            "Hm, I couldn't work out a course for that selection. The CM may not be in the timeline yet...",
             ephemeral=True,
         )
         return
@@ -398,7 +398,7 @@ async def handle_stamina_interaction(
     course_entry = cm_module.get_course_entry(course_id)
     if not course_entry:
         await interaction.followup.send(
-            f"No course geometry found for course ID {course_id}.",
+            f"I couldn't find any course geometry for course ID {course_id}...",
             ephemeral=True,
         )
         return

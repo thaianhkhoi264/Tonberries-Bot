@@ -243,7 +243,7 @@ async def handle_link_command(message: discord.Message, args: str) -> None:
     if sub == "list":
         links = await get_all_links()
         if not links:
-            await message.channel.send("No player links yet. `link import` or `link <@user> <name>`.")
+            await message.channel.send("There are no player links yet! Try `link import` or `link <@user> <name>`.")
             return
         lines = [f"- **{name}** → <@{uid}>" for name, uid in links.items()]
         text = "\n".join(lines)
@@ -260,7 +260,7 @@ async def handle_link_command(message: discord.Message, args: str) -> None:
             )
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[Players] export failed: {exc}")
-            await message.channel.send(f"Export failed: {exc}")
+            await message.channel.send(f"Sorry, the export failed: {exc}")
         return
 
     if sub == "import":
@@ -276,14 +276,14 @@ async def handle_link_command(message: discord.Message, args: str) -> None:
                         f.write(text)
                     src = f"attachment `{att.filename}` (saved to {PLAYER_LINKS_CSV})"
                 except Exception as exc:  # noqa: BLE001
-                    await message.channel.send(f"Couldn't read attachment: {exc}")
+                    await message.channel.send(f"Sorry, I couldn't read the attachment: {exc}")
                     return
                 break
         if text is None:
             if not os.path.exists(PLAYER_LINKS_CSV):
                 await message.channel.send(
-                    f"No `{PLAYER_LINKS_CSV}` and no CSV attached. "
-                    f"Run `link export` first, fill it in, then `link import`."
+                    f"I don't see `{PLAYER_LINKS_CSV}` or an attached CSV... "
+                    f"Please run `link export` first, fill it in, then `link import`."
                 )
                 return
             with open(PLAYER_LINKS_CSV, encoding="utf-8-sig") as f:
@@ -321,12 +321,12 @@ async def handle_link_command(message: discord.Message, args: str) -> None:
 
     name = " ".join(parts[1:]).strip()
     if not name:
-        await message.channel.send("Usage: `link <@user|id> <trainer name>`")
+        await message.channel.send("Like this, please: `link <@user|id> <trainer name>`")
         return
 
     await set_link(name, uid, linked_by=message.author.id)
     await message.channel.send(
-        f"Linked **{name}** → <@{uid}>.",
+        f"Linked **{name}** → <@{uid}>! ♪",
         allowed_mentions=discord.AllowedMentions.none(),
     )
     logger.info(f"[Players] {message.author.id} linked {name!r} -> {uid}")
@@ -335,10 +335,10 @@ async def handle_link_command(message: discord.Message, args: str) -> None:
 async def handle_unlink_command(message: discord.Message, args: str) -> None:
     name = args.strip()
     if not name:
-        await message.channel.send("Usage: `unlink <trainer name>`")
+        await message.channel.send("Like this, please: `unlink <trainer name>`")
         return
     if await remove_link(name):
         await message.channel.send(f"Unlinked **{name}**.")
         logger.info(f"[Players] {message.author.id} unlinked {name!r}")
     else:
-        await message.channel.send(f"**{name}** wasn't linked.")
+        await message.channel.send(f"**{name}** wasn't linked, so there's nothing to remove.")

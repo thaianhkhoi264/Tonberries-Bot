@@ -60,7 +60,7 @@ _active_tasks: dict[int, asyncio.Task] = {}
 def _timer_text(text: str, end_ts: int) -> str:
     prefix = f"**{text}** Independent" if text else "Independent"
     return (
-        f"{prefix} training will end in <t:{end_ts}:R>. <:diaread:1529673666370207884>\n"
+        f"{prefix} training will be done <t:{end_ts}:R>. I'll be waiting! <:diaread:1529673666370207884>\n"
         "Use `end` to finish early, or `renew` to restart the timer."
     )
 
@@ -230,7 +230,7 @@ async def handle_renew(message: discord.Message) -> None:
 
     if existing is None:
         await message.channel.send(
-            "No previous training found. Use `auto` to start one."
+            "I don't have a previous training on record, Trainer. Use `auto` to start one!"
         )
         return
 
@@ -269,7 +269,7 @@ async def handle_end(message: discord.Message) -> None:
         existing = await _get_timer(conn, user_id)
 
     if existing is None or existing["state"] != "pending":
-        await message.channel.send("No active timer to end.")
+        await message.channel.send("There's no timer running right now, Trainer.")
         return
 
     # Cancel the in-flight task

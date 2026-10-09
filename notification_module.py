@@ -77,9 +77,9 @@ def _build_message(row) -> str:
     t = f"<t:{event_time}:R>"
 
     if timing_type == "reminder":
-        return f"🐴 Reminder: **{title}** starts {t}!" # Reminder Notifications
+        return f"🐴 Reminder: **{title}** starts {t}! Let's be ready!" # Reminder Notifications
     if timing_type == "start":
-        return f"🐴 **{title}** is starting {t}!" # Event Start notifications
+        return f"🐴 **{title}** is starting {t}! Let's give it our all!" # Event Start notifications
     if timing_type == "end":
         if event_time <= int(datetime.now(timezone.utc).timestamp()) + 60:
             return f"🐴 **{title}** has ended." # Event End Notifications
