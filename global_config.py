@@ -1,13 +1,11 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import local_config as _local
 from local_config import (
     OWNER_USER_IDS,
     MAIN_OWNER_ID,
     MAIN_SERVER_ID,
-    ONGOING_CHANNEL_ID,
-    UPCOMING_CHANNEL_ID,
-    NOTIFICATION_CHANNEL_ID,
     GENERAL_CHANNEL_ID,
     CIRCLE_ID,
     CIRCLE_CHANNEL_ID,
@@ -25,6 +23,28 @@ from local_config import (
 # local_config.py, which is gitignored and never committed. Copy
 # local_config.example.py to local_config.py and fill in real values to run
 # the bot. Everything else (paths, non-sensitive settings) stays here.
+
+
+def _build_event_targets() -> list[dict]:
+    """Servers that get the ongoing / upcoming / notification channels.
+
+    Each target: {"name", "ongoing", "upcoming", "notification", "ping_here"}.
+    Defined as `EVENT_TARGETS` in local_config.py. If that's absent (an older
+    local_config.py) fall back to the original single-server constants so the
+    bot keeps working unchanged.
+    """
+    raw = getattr(_local, "EVENT_TARGETS", None)
+    if not raw:
+        raw = [{
+            "name":         "main",
+            "ongoing":      _local.ONGOING_CHANNEL_ID,
+            "upcoming":     _local.UPCOMING_CHANNEL_ID,
+            "notification": _local.NOTIFICATION_CHANNEL_ID,
+        }]
+    return [{"name": f"server{i + 1}", "ping_here": False, **t} for i, t in enumerate(raw)]
+
+
+EVENT_TARGETS: list[dict] = _build_event_targets()
 
 # The Umamusume global server's daily reset is 15:00 UTC. Fan counts (daily and
 # monthly) roll over then, not at the UTC calendar midnight — so every "what day

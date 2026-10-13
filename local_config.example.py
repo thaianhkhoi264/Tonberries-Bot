@@ -8,9 +8,19 @@ OWNER_USER_IDS          = (0, 0)  # Discord user IDs allowed to DM-command the b
 MAIN_OWNER_ID           = 0       # Primary owner — receives restart DMs, exclusive hitlist access
 MAIN_SERVER_ID          = 0       # Discord guild (server) ID for the Tonberries server
 
-ONGOING_CHANNEL_ID      = 0  # Channel for currently active UMA events
-UPCOMING_CHANNEL_ID     = 0  # Channel for upcoming UMA events
-NOTIFICATION_CHANNEL_ID = 0  # Channel where notification messages are posted
+# Servers that get the same ongoing / upcoming event embeds and notification
+# messages. One entry per server (the bot must be a member of each).
+#   ongoing      — channel for currently active UMA events
+#   upcoming     — channel for upcoming UMA events
+#   notification — channel where notification messages are posted
+#   ping_here    — True = notification messages in that server start with @here
+#                  (the bot needs "Mention @everyone, @here" in that channel)
+# If EVENT_TARGETS is omitted, the old single-server ONGOING_CHANNEL_ID /
+# UPCOMING_CHANNEL_ID / NOTIFICATION_CHANNEL_ID constants are used instead.
+EVENT_TARGETS = [
+    {"name": "Tonberries", "ongoing": 0, "upcoming": 0, "notification": 0, "ping_here": False},
+    {"name": "Other server", "ongoing": 0, "upcoming": 0, "notification": 0, "ping_here": True},
+]
 
 GENERAL_CHANNEL_ID = 0  # uma-chat-v2 channel
 

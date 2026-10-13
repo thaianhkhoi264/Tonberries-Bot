@@ -9,7 +9,7 @@ import aiosqlite
 import discord
 
 from bot import bot, logger
-from global_config import EMOJI_MAPPING_JSON, LOCAL_DB, SHARED_NOTIF_DB, NOTIFICATION_CHANNEL_ID
+from global_config import EMOJI_MAPPING_JSON, EVENT_TARGETS, LOCAL_DB, SHARED_NOTIF_DB
 
 # ---------------------------------------------------------------------------
 # Dia's notification wording
@@ -352,14 +352,26 @@ async def _resolve_message(row) -> str:
 
 
 async def _send_notification(row):
-    channel = bot.get_channel(NOTIFICATION_CHANNEL_ID)
-    if not channel:
-        logger.error("[Notifications] Notification channel not found")
-        return
-    try:
-        await channel.send(await _resolve_message(row))
-    except discord.DiscordException as exc:
-        logger.error(f"[Notifications] Failed to send notification: {exc}")
+    """Send one notification to every configured server's notification channel.
+
+    The text is resolved once so every server gets the identical message; a
+    server whose `ping_here` flag is set gets it prefixed with @here. A failure
+    in one server never blocks the others.
+    """
+    message = await _resolve_message(row)
+    for target in EVENT_TARGETS:
+        channel = bot.get_channel(target["notification"])
+        if not channel:
+            logger.error(f"[Notifications] Notification channel not found for '{target['name']}'")
+            continue
+        ping = bool(target.get("ping_here"))
+        try:
+            await channel.send(
+                f"@here {message}" if ping else message,
+                allowed_mentions=discord.AllowedMentions(everyone=ping),
+            )
+        except discord.DiscordException as exc:
+            logger.error(f"[Notifications] Failed to send notification to '{target['name']}': {exc}")
 
 
 # ---------------------------------------------------------------------------

@@ -12,8 +12,7 @@ from global_config import (
     SHARED_EVENTS_DB,
     SCRAPER_LAST_RUN_FILE,
     GACHA_BOT_DIR,
-    ONGOING_CHANNEL_ID,
-    UPCOMING_CHANNEL_ID,
+    EVENT_TARGETS,
     SKILLS_DB,
     MAIN_OWNER_ID,
 )
@@ -337,7 +336,7 @@ async def clear_channel_messages(channel: discord.TextChannel, valid_ids: set):
         return
 
     # Capture embed details before deleting
-    log_lines = [f"ORPHAN CLEANUP — #{channel.name} (id={channel.id})"]
+    log_lines = [f"ORPHAN CLEANUP — {channel.guild.name} / #{channel.name} (id={channel.id})"]
     for msg, ev_id in to_delete:
         reason = f"event_id={ev_id} not in valid_ids" if ev_id else "untracked bot embed (no DB row)"
         embed_title = msg.embeds[0].title if msg.embeds else "(no embed)"
@@ -367,7 +366,7 @@ async def clear_channel_messages(channel: discord.TextChannel, valid_ids: set):
     logger.info(f"[UMA] Cleared {deleted} orphaned message(s) from #{channel.name}")
     _write_fix_log(log_lines)
     await _dm_owner(
-        f"⚠️ **[UMA]** Deleted {deleted} orphaned message(s) from <#{channel.id}>. "
+        f"⚠️ **[UMA]** Deleted {deleted} orphaned message(s) from <#{channel.id}> ({channel.guild.name}). "
         f"Details in `{_FIX_LOG}`."
     )
 
@@ -421,7 +420,7 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
         except Exception:
             return "?"
 
-    log_lines = [f"ORDER FIX — #{channel.name} (id={channel.id})  |  mismatch starts at index {prefix_len}"]
+    log_lines = [f"ORDER FIX — {channel.guild.name} / #{channel.name} (id={channel.id})  |  mismatch starts at index {prefix_len}"]
     log_lines.append("  DB rows (actual order by message_id):")
     for ev_id, msg_id in actual:
         marker = "  ← MISMATCH" if ev_id in [r[0] for r in to_delete] else ""
@@ -438,7 +437,7 @@ async def ensure_channel_order(channel: discord.TextChannel, events_for_channel:
 
     _write_fix_log(log_lines)
     await _dm_owner(
-        f"⚠️ **[UMA]** <#{channel.id}> was out of order — reposting {len(to_delete)} message(s). "
+        f"⚠️ **[UMA]** <#{channel.id}> ({channel.guild.name}) was out of order — reposting {len(to_delete)} message(s). "
         f"Details in `{_FIX_LOG}`."
     )
 
@@ -474,11 +473,19 @@ async def _update_timers_impl(force_update: bool):
     if not bot.is_ready():
         return
 
-    ongoing_channel  = bot.get_channel(ONGOING_CHANNEL_ID)
-    upcoming_channel = bot.get_channel(UPCOMING_CHANNEL_ID)
-
-    if not ongoing_channel or not upcoming_channel:
-        logger.error("[UMA] Could not find ongoing/upcoming channel(s) — check IDs in global_config.py")
+    # Every configured server gets the same embeds in its own channels.
+    targets = []
+    for target in EVENT_TARGETS:
+        ongoing_channel  = bot.get_channel(target["ongoing"])
+        upcoming_channel = bot.get_channel(target["upcoming"])
+        if not ongoing_channel or not upcoming_channel:
+            logger.error(
+                f"[UMA] Could not find ongoing/upcoming channel(s) for '{target['name']}' "
+                f"— check EVENT_TARGETS in local_config.py"
+            )
+            continue
+        targets.append((target["name"], ongoing_channel, upcoming_channel))
+    if not targets:
         return
 
     now               = int(datetime.now(timezone.utc).timestamp())
@@ -516,10 +523,6 @@ async def _update_timers_impl(force_update: bool):
 
     valid_ids = {e["id"] for e in events}
 
-    # Remove orphaned Discord messages
-    await clear_channel_messages(ongoing_channel,  valid_ids)
-    await clear_channel_messages(upcoming_channel, valid_ids)
-
     ongoing_events  = []
     upcoming_events = []
     skipped = 0
@@ -537,19 +540,33 @@ async def _update_timers_impl(force_update: bool):
             continue
 
         if start <= now < end:
-            await upsert_event_message(ongoing_channel, event, event["id"], force_update)
             ongoing_events.append(event)
         elif start > now:
-            await upsert_event_message(upcoming_channel, event, event["id"], force_update)
             upcoming_events.append(event)
 
-    await ensure_channel_order(ongoing_channel,  ongoing_events)
-    await ensure_channel_order(upcoming_channel, upcoming_events)
+    for name, ongoing_channel, upcoming_channel in targets:
+        try:
+            # Remove orphaned Discord messages
+            await clear_channel_messages(ongoing_channel,  valid_ids)
+            await clear_channel_messages(upcoming_channel, valid_ids)
 
-    logger.info(
-        f"[UMA] Refresh done — {len(ongoing_events)} ongoing, "
-        f"{len(upcoming_events)} upcoming, {skipped} skipped"
-    )
+            for event in ongoing_events:
+                await upsert_event_message(ongoing_channel, event, event["id"], force_update)
+            for event in upcoming_events:
+                await upsert_event_message(upcoming_channel, event, event["id"], force_update)
+
+            await ensure_channel_order(ongoing_channel,  ongoing_events)
+            await ensure_channel_order(upcoming_channel, upcoming_events)
+        except Exception as exc:
+            # One server failing (missing permissions, bot removed, ...) must not
+            # stop the others from refreshing.
+            logger.error(f"[UMA] Refresh failed for '{name}': {exc}")
+            continue
+
+        logger.info(
+            f"[UMA] Refresh done [{name}] — {len(ongoing_events)} ongoing, "
+            f"{len(upcoming_events)} upcoming, {skipped} skipped"
+        )
 
 
 # ---------------------------------------------------------------------------

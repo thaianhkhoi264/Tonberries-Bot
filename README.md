@@ -14,4 +14,4 @@ A personal Discord bot for one (1) club in Umamusume — daily fan-count trackin
 
 ## Status
 
-This is a one-off bot built for a specific server — not set up for general use, and not documented for it either. If you've stumbled onto this repo, there's not much to see here 👀
+This is a one-off bot built for a few specific servers and not set up for general use, and not documented for it either. If you've stumbled onto this repo, there's not much to see here 👀
