@@ -285,8 +285,6 @@ def _build_chart_embed(
     # In-game description from GameTora (if available)
     if gt and gt.get("description"):
         desc_parts.append(gt["description"])
-    if desc_parts:
-        desc_parts.append("")   # blank separator
 
     # Generated, course-specific description (skill_describe). The raw condition /
     # effect / verdict text below is only the fallback when no course is resolved.
@@ -298,6 +296,8 @@ def _build_chart_embed(
             logger.error(f"[Skills] describe_skill failed for {skill_id}: {exc}")
 
     if info is None:
+        if desc_parts:
+            desc_parts.append("")   # blank separator
         # Condition blocks
         if precond_block:
             desc_parts.append(f"**Pre-condition:**\n{precond_block}")
@@ -329,8 +329,11 @@ def _build_chart_embed(
             f"https://alpha123.github.io/uma-tools/skill-visualizer-global/"
             f"#cid={course_id},sid={skill_id}"
         )
-        gt_url = f"https://gametora.com/umamusume/skill-condition-viewer?skill={skill_id}"
-        desc_parts.append(f"\n[Skill visualizer]({viz_url})  \u00b7  [Condition viewer]({gt_url})")
+        # GameTora has no page for inherited (9XXXXX) skills; link the unique (1XXXXX) one.
+        gt_skill_id = "1" + skill_id[1:] if skill_id.startswith("9") else skill_id
+        gt_url = f"https://gametora.com/umamusume/skill-condition-viewer?skill={gt_skill_id}"
+        desc_parts.append(("\n" if info is None else "")
+                          + f"[Skill visualizer]({viz_url})  \u00b7  [Condition viewer]({gt_url})")
 
     description = "\n".join(desc_parts).strip()
     # Discord embed description cap is 4096 chars
