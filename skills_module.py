@@ -332,8 +332,9 @@ def _build_chart_embed(
     )
     if gt and gt.get("icon_url"):
         embed.set_thumbnail(url=gt["icon_url"])
-    if character_name:
-        embed.add_field(name="Character", value=character_name, inline=False)
+    # White regular skills are owned by many characters; listing them all bloats the embed.
+    if character_name and (rarity >= 2 or skill_id.startswith("9")):
+        embed.add_field(name="Character", value=character_name[:1024], inline=False)
     if course_id:
         embed.set_image(url="attachment://skill_chart.png")
     if course_display:
