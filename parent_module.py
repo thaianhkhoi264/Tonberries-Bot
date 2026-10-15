@@ -295,18 +295,24 @@ async def refresh_char_ids() -> str:
 # ---------------------------------------------------------------------------
 
 def _parse_pos_range(chunk: str) -> tuple[int | None, int | None]:
-    ge_rate = le_rate = None
-    for m in re.finditer(r"order_rate(>=|<=)(\d+(?:\.\d+)?)", chunk):
+    lo_rate = hi_rate = None
+    for m in re.finditer(r"order_rate(>=|<=|>|<)(\d+(?:\.\d+)?)", chunk):
         op, val = m.group(1), float(m.group(2))
-        if op == ">=":
-            ge_rate = val
-        elif op == "<=":
-            le_rate = val
-    if ge_rate is not None or le_rate is not None:
         # order_rate -> order rounds to nearest, not floor/ceil — see
-        # skill_chart._order_rate_to_order for the source.
-        lo = _order_rate_to_order(ge_rate, NHORSE) if ge_rate is not None else 1
-        hi = _order_rate_to_order(le_rate, NHORSE) if le_rate is not None else NHORSE
+        # skill_chart._order_rate_to_order. A strict operator then shifts by
+        # one: order_rate>50 in 9 horses = order>5 = 6th or worse.
+        n = _order_rate_to_order(val, NHORSE)
+        if op == ">=":
+            lo_rate = n
+        elif op == ">":
+            lo_rate = n + 1
+        elif op == "<=":
+            hi_rate = n
+        else:
+            hi_rate = n - 1
+    if lo_rate is not None or hi_rate is not None:
+        lo = lo_rate if lo_rate is not None else 1
+        hi = hi_rate if hi_rate is not None else NHORSE
         # Tighten with any absolute order constraints (e.g. order>=4 raises lo)
         for om in re.finditer(r"(?<!\w)order(>=|<=)(\d+)", chunk):
             op2, val2 = om.group(1), int(om.group(2))

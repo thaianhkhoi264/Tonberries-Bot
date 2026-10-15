@@ -283,8 +283,6 @@ def _build_chart_embed(
     # In-game description from GameTora (if available)
     if gt and gt.get("description"):
         desc_parts.append(gt["description"])
-    if gt and gt.get("description_detailed"):
-        desc_parts.append(f"*{gt['description_detailed']}*")
     if desc_parts:
         desc_parts.append("")   # blank separator
 

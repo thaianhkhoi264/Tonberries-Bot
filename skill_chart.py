@@ -73,7 +73,7 @@ def phase_end(distance: int, phase: int) -> float:
 # Condition → geometry range evaluator
 # ---------------------------------------------------------------------------
 
-_COND_RE   = re.compile(r"([a-z_]+)(>=|<=|==|!=|>|<)(-?\d+(?:\.\d+)?)")
+_COND_RE   = re.compile(r"([a-z0-9_]+)(>=|<=|==|!=|>|<)(-?\d+(?:\.\d+)?)")
 _GEO_FIELDS = {
     # Phase position
     "phase",
@@ -548,15 +548,18 @@ def state_text(condition: str) -> str:
 
 def _order_rate_note(op: str, val_pct: float) -> str:
     """Convert an order_rate condition value to per-race-size position labels."""
-    pct = val_pct / 100.0
-    if op in (">=", ">"):
-        cm  = math.ceil(pct * CM_HORSES)
-        loh = math.ceil(pct * LOH_HORSES)
+    # order_rate converts to the nearest integer first; a strict operator
+    # then shifts by one ("order_rate>50" in 9 horses = 6th or worse).
+    cm  = _order_rate_to_order(val_pct, CM_HORSES)
+    loh = _order_rate_to_order(val_pct, LOH_HORSES)
+    if op == ">=":
         return f"(CM >={cm} | LoH >={loh})"
-    elif op in ("<=", "<"):
-        cm  = max(math.floor(pct * CM_HORSES),  1)
-        loh = max(math.floor(pct * LOH_HORSES), 1)
-        return f"(CM <={cm} | LoH <={loh})"
+    if op == ">":
+        return f"(CM >={cm + 1} | LoH >={loh + 1})"
+    if op == "<=":
+        return f"(CM <={max(cm, 1)} | LoH <={max(loh, 1)})"
+    if op == "<":
+        return f"(CM <={max(cm - 1, 1)} | LoH <={max(loh - 1, 1)})"
     return ""
 
 
@@ -637,10 +640,18 @@ def _extract_verdict_state(condition: str) -> list[str]:
     has_ord  = "order"      in common_fields
 
     if has_rate or has_ord:
-        rate_ge = rate_le = None
+        rate_lo = rate_hi = None    # CM positions; strict ops shift by one
         if has_rate:
-            rate_ge = next((v for op, v in atoms["order_rate"] if op == ">="), None)
-            rate_le = next((v for op, v in atoms["order_rate"] if op == "<="), None)
+            for op, v in atoms["order_rate"]:
+                n = _order_rate_to_order(v, CM_HORSES)
+                if op == ">=":
+                    rate_lo = n
+                elif op == ">":
+                    rate_lo = n + 1
+                elif op == "<=":
+                    rate_hi = n
+                elif op == "<":
+                    rate_hi = n - 1
 
         ord_ge = ord_le = ord_eq = None
         if has_ord:
@@ -650,9 +661,9 @@ def _extract_verdict_state(condition: str) -> list[str]:
 
         # Combine: order>=X (absolute lower) + order_rate<=Y (% upper)
         if (has_rate and has_ord
-                and rate_le is not None and rate_ge is None
+                and rate_hi is not None and rate_lo is None
                 and ord_ge  is not None and ord_le  is None and ord_eq is None):
-            hi = _order_rate_to_order(rate_le, CM_HORSES)
+            hi = rate_hi
             lo = int(ord_ge)
             if lo == hi:
                 notes.append(f"in {_ordinal(lo)}")
@@ -661,9 +672,9 @@ def _extract_verdict_state(condition: str) -> list[str]:
 
         # Combine: order_rate>=X (% lower) + order<=Y (absolute upper)
         elif (has_rate and has_ord
-                and rate_ge is not None and rate_le is None
+                and rate_lo is not None and rate_hi is None
                 and ord_le  is not None and ord_ge  is None and ord_eq is None):
-            lo = _order_rate_to_order(rate_ge, CM_HORSES)
+            lo = rate_lo
             hi = int(ord_le)
             if lo == hi:
                 notes.append(f"in {_ordinal(lo)}")
@@ -673,17 +684,16 @@ def _extract_verdict_state(condition: str) -> list[str]:
         else:
             # Handle each field independently
             if has_rate:
-                if rate_ge is not None and rate_le is not None:
-                    lo = _order_rate_to_order(rate_ge, CM_HORSES)
-                    hi = _order_rate_to_order(rate_le, CM_HORSES)
+                if rate_lo is not None and rate_hi is not None:
+                    lo, hi = rate_lo, rate_hi
                     if lo == hi:
                         notes.append(f"{_ordinal(lo)} (CM)")
                     else:
                         notes.append(f"{_ordinal(lo)}\u2013{_ordinal(hi)} (CM)")
-                elif rate_le is not None:
-                    notes.append(f"top {max(1, _order_rate_to_order(rate_le, CM_HORSES))} (CM)")
-                elif rate_ge is not None:
-                    notes.append(f"{_ordinal(_order_rate_to_order(rate_ge, CM_HORSES))}+ (CM)")
+                elif rate_hi is not None:
+                    notes.append(f"top {max(1, rate_hi)} (CM)")
+                elif rate_lo is not None:
+                    notes.append(f"{_ordinal(rate_lo)}+ (CM)")
 
             if has_ord:
                 if ord_eq is not None:
@@ -713,7 +723,7 @@ def _extract_verdict_state(condition: str) -> list[str]:
     if "blocked_front_continuetime" in common_fields:
         for op, v in atoms["blocked_front_continuetime"]:
             if op == ">=":
-                notes.append(f"blocked for {v / 10000:.0f}s+")
+                notes.append(f"blocked for {v:g}s+")
                 break
 
     # motivation >= X
