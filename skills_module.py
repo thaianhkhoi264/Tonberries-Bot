@@ -20,6 +20,7 @@ import discord
 from discord import app_commands
 
 import cm_module
+import skill_describe
 from global_config import (
     EMOJI_MAPPING_JSON,
     SKILL_DATA_JSON,
@@ -264,8 +265,9 @@ def _build_chart_embed(
     course_entry: dict | None = None,
     is_inherited: bool = False,
     character_name: str | None = None,
+    is_cm: bool = False,
 ) -> discord.Embed:
-    """Build a rich embed with condition blocks, effect summary, and optional chart."""
+    """Build the /skill embed: GameTora description, generated course-specific fields, optional chart."""
     alts   = entry.get("alternatives", [])
     alt    = alts[alt_index] if alts and alt_index < len(alts) else (alts[0] if alts else {})
     cond   = alt.get("condition", "")
@@ -286,30 +288,40 @@ def _build_chart_embed(
     if desc_parts:
         desc_parts.append("")   # blank separator
 
-    # Condition blocks
-    if precond_block:
-        desc_parts.append(f"**Pre-condition:**\n{precond_block}")
-        desc_parts.append(f"**Activation:**\n{cond_block}")
-    elif cond_block:
-        desc_parts.append(f"**Condition:**\n{cond_block}")
+    # Generated, course-specific description (skill_describe). The raw condition /
+    # effect / verdict text below is only the fallback when no course is resolved.
+    info = None
+    if course_entry is not None:
+        try:
+            info = skill_describe.describe_skill(skill_id, entry, en_name, course_entry, is_cm=is_cm)
+        except Exception as exc:
+            logger.error(f"[Skills] describe_skill failed for {skill_id}: {exc}")
 
-    # Effect + duration
-    if len(alts) > 1:
-        effect_lines = []
-        for i, a in enumerate(alts, 1):
-            e = format_effects(a.get("effects", []))
-            d = int(a.get("baseDuration", 0)) / 10000.0
-            effect_lines.append(f"Alt {i}: {e}  |  {d:.1f}s")
-        desc_parts.append("\n**Effects:**\n" + "\n".join(effect_lines))
-        if not all_same_geo and course_entry is not None:
-            desc_parts.append(f"*(chart and verdict based on Alt {alt_index + 1})*")
-    else:
-        desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
+    if info is None:
+        # Condition blocks
+        if precond_block:
+            desc_parts.append(f"**Pre-condition:**\n{precond_block}")
+            desc_parts.append(f"**Activation:**\n{cond_block}")
+        elif cond_block:
+            desc_parts.append(f"**Condition:**\n{cond_block}")
 
-    # Verdict (acceleration skills only)
-    verdict = accel_verdict(cond, precond, alt.get("effects", []), course_entry, is_inherited)
-    if verdict:
-        desc_parts.append(f"\n**Verdict:** {verdict}")
+        # Effect + duration
+        if len(alts) > 1:
+            effect_lines = []
+            for i, a in enumerate(alts, 1):
+                e = format_effects(a.get("effects", []))
+                d = int(a.get("baseDuration", 0)) / 10000.0
+                effect_lines.append(f"Alt {i}: {e}  |  {d:.1f}s")
+            desc_parts.append("\n**Effects:**\n" + "\n".join(effect_lines))
+            if not all_same_geo and course_entry is not None:
+                desc_parts.append(f"*(chart and verdict based on Alt {alt_index + 1})*")
+        else:
+            desc_parts.append(f"\n**Effect:** {efx}  |  **Duration:** {dur_s:.1f}s")
+
+        # Verdict (acceleration skills only)
+        verdict = accel_verdict(cond, precond, alt.get("effects", []), course_entry, is_inherited)
+        if verdict:
+            desc_parts.append(f"\n**Verdict:** {verdict}")
 
     # External links (only when a course is resolved so visualizer link is meaningful)
     if course_id:
@@ -320,7 +332,7 @@ def _build_chart_embed(
         gt_url = f"https://gametora.com/umamusume/skill-condition-viewer?skill={skill_id}"
         desc_parts.append(f"\n[Skill visualizer]({viz_url})  \u00b7  [Condition viewer]({gt_url})")
 
-    description = "\n".join(desc_parts)
+    description = "\n".join(desc_parts).strip()
     # Discord embed description cap is 4096 chars
     if len(description) > 4096:
         description = description[:4090] + "\u2026"
@@ -335,6 +347,9 @@ def _build_chart_embed(
     # White regular skills are owned by many characters; listing them all bloats the embed.
     if character_name and (rarity >= 2 or skill_id.startswith("9")):
         embed.add_field(name="Character", value=character_name[:1024], inline=False)
+    if info is not None:
+        for fname, fvalue, finline in skill_describe.embed_fields(info):
+            embed.add_field(name=fname, value=fvalue, inline=finline)
     if course_id:
         embed.set_image(url="attachment://skill_chart.png")
     if course_display:
@@ -505,6 +520,7 @@ async def handle_skill_interaction(
         course_entry=course_entry_for_embed,
         is_inherited=is_inherited,
         character_name=character_name,
+        is_cm=bool(course and course.startswith("cm:")),
     )
 
     if chart_bytes:
