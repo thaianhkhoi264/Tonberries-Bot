@@ -133,6 +133,43 @@ def status_rank_emoji(rank: int) -> Optional[str]:
     return _status_rank_table().get(f"{rank - 1:02d}")
 
 
+# Aptitude values are 1-8 = the game's G-S ladder (1 G, 2 F, 3 E, 4 D, 5 C, 6 B, 7 A, 8 S;
+# plan doc, "Aptitudes"). The status_rank emoji set interleaves each letter with its "+"
+# variant (00 G, 01 G+, 02 F, 03 F+, ... 14 S), so aptitude N -> key (N - 1) * 2.
+_APTITUDE_LETTERS = {1: "G", 2: "F", 3: "E", 4: "D", 5: "C", 6: "B", 7: "A", 8: "S"}
+
+# (payload group, [(payload key, display label), ...]) in display order.
+_APTITUDE_GROUPS = (
+    ("Distance", "distance", (("short", "Short"), ("mile", "Mile"), ("middle", "Middle"), ("long", "Long"))),
+    ("Style", "runningStyle", (("nige", "Front"), ("senko", "Pace"), ("sashi", "Late"), ("oikomi", "End"))),
+    ("Surface", "ground", (("turf", "Turf"), ("dirt", "Dirt"))),
+)
+
+
+def aptitude_display(value: int) -> str:
+    """Rank-letter emoji for a 1-8 aptitude value, falling back to the plain letter if the
+    emoji isn't mapped, or the raw number if the value is outside 1-8."""
+    letter = _APTITUDE_LETTERS.get(value)
+    if letter is None:
+        return str(value)
+    return _status_rank_table().get(f"{(value - 1) * 2:02d}") or letter
+
+
+def aptitude_lines(aptitudes: Optional[dict]) -> list[str]:
+    """One line per group ("**Distance** Short <S> · Mile <A> · ..."), or [] unless all ten
+    aptitudes are present — the plugin never partially fills the object, so a gap means "no
+    data" and rendering a partial row would read as a real (wrong) value."""
+    if not isinstance(aptitudes, dict):
+        return []
+    lines = []
+    for label, group_key, entries in _APTITUDE_GROUPS:
+        group = aptitudes.get(group_key)
+        if not isinstance(group, dict) or any(not isinstance(group.get(k), int) for k, _ in entries):
+            return []
+        lines.append(f"**{label}** " + " · ".join(f"{name} {aptitude_display(group[k])}" for k, name in entries))
+    return lines
+
+
 def _stat_table() -> dict:
     """{ "speed"/"stamina"/"power"/"guts"/"wits"/"pal"/"group" -> Discord emoji markup }."""
     return _load(EMOJI_MAPPING_JSON).get("stat", {})

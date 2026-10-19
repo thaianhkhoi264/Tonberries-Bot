@@ -655,6 +655,10 @@ def _add_rank_fans_stats(embed: discord.Embed, data: dict) -> None:
         stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in stats.items())
         embed.add_field(name="Stats", value=stat_line, inline=False)
 
+    aptitudes = decode.aptitude_lines(data.get("aptitudes"))
+    if aptitudes:
+        embed.add_field(name="Aptitudes", value="\n".join(aptitudes), inline=False)
+
 
 def _build_manual_embed(user_id: int, card_id: int, data: dict) -> discord.Embed:
     char = decode.character_display(card_id)
@@ -1395,6 +1399,10 @@ def _build_progress_embed(user_id: int, data: dict, deck_positions: list | None,
     if stats:
         stat_line = " / ".join(f"{decode.stat_emoji(k) or k.title()} {v}" for k, v in stats.items())
         embed.add_field(name="Stats", value=stat_line, inline=False)
+
+    aptitudes = decode.aptitude_lines(data.get("aptitudes"))
+    if aptitudes:
+        embed.add_field(name="Aptitudes", value="\n".join(aptitudes), inline=False)
 
     embed.add_field(name="Skill Points / Fans", value=f"{data.get('skillPoint', 0)} / {data.get('fans', 0):,}", inline=True)
     embed.add_field(name="Owner", value=f"<@{user_id}>", inline=True)
