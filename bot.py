@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Imported after load_dotenv(): it pulls in global_config, which reads .env values.
+from moderation_module import ModerationTree  # noqa: E402
+
 os.makedirs("logs", exist_ok=True)
 
 _file_handler = logging.FileHandler("logs/tonberries.log", encoding="utf-8")
@@ -24,6 +27,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True  # required for fan-role cleanup (empty-role detection)
 
-bot = commands.Bot(command_prefix="\x00", intents=intents, help_command=None)
+# ModerationTree answers blacklisted / timed-out users on every slash command and
+# autocomplete (see moderation_module.py).
+bot = commands.Bot(command_prefix="\x00", intents=intents, help_command=None, tree_cls=ModerationTree)
 
 token = os.getenv("DISCORD_TOKEN")

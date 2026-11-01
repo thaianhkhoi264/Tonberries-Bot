@@ -23,6 +23,7 @@ import parent_module
 import stamina_module
 import role_module
 import players_module
+import moderation_module
 import training_module
 import training_data_sync
 import api_server
@@ -231,12 +232,15 @@ async def _slash_removerole_autocomplete(
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     if payload.user_id == bot.user.id:
         return
+    if moderation_module.get_block(payload.user_id) is not None:
+        return
     await lookup_module.handle_reaction(payload)
 
 
 @bot.event
 async def on_ready():
     logger.info(f"[Bot] Logged in as {bot.user} (ID: {bot.user.id})")
+    await moderation_module.init_db()  # first, so blocks apply before anything else runs
     await uma_module.init_local_db()
     await uma_module.start_background_tasks()
     await circles_module.start_background_task()
@@ -303,6 +307,12 @@ async def on_message(message: discord.Message):
 
     if message.guild is not None:
         await _handle_guild_message(message)
+        return
+
+    # Blacklisted / timed-out users get a (rate-limited) notice instead of anything else.
+    block = moderation_module.get_block(message.author.id)
+    if block is not None:
+        await moderation_module.notify_message(message, block)
         return
 
     cmd       = message.content.strip()
@@ -377,6 +387,12 @@ async def on_message(message: discord.Message):
         await players_module.handle_unlink_command(message, cmd[len("unlink"):].strip())
     elif cmd_lower == "link" or cmd_lower.startswith("link "):
         await players_module.handle_link_command(message, cmd[len("link"):].strip())
+    elif cmd_lower == "blacklist" or cmd_lower.startswith("blacklist "):
+        await moderation_module.handle_blacklist_command(message, cmd[len("blacklist"):].strip())
+    elif cmd_lower == "unblacklist" or cmd_lower.startswith("unblacklist "):
+        await moderation_module.handle_unblacklist_command(message, cmd[len("unblacklist"):].strip())
+    elif cmd_lower == "timeout" or cmd_lower.startswith("timeout "):
+        await moderation_module.handle_timeout_command(message, cmd[len("timeout"):].strip())
     elif cmd_lower == "render monthly":
         await _cmd_render_monthly(message)
     elif cmd_lower == "skill sync":
@@ -414,6 +430,9 @@ async def _cmd_help(message: discord.Message):
         "`trainee refresh` — Re-scrape trainee data (umamusu + Fandom gaps) and normalize images\n"
         "`role cleanup` — Preview empty fan roles (add `now` to delete them)\n"
         "`link` — Link in-game trainers to Discord users (`link list`/`import`/`export`, `link <@user> <name>`, `unlink <name>`)\n"
+        "`blacklist <user-id>` — Block a user from using me (`blacklist` alone lists everyone blocked)\n"
+        "`timeout <user-id> <seconds>` — Block a user temporarily\n"
+        "`unblacklist <user-id>` — Lift a blacklist or a timeout\n"
         "`render monthly` — Render + DM the Fan Leaderboard image "
         "(current in-game month, or the last finished month if it has no data yet)\n"
         "`skill sync` — Force-download uma-skill-tools data from GitHub\n"
@@ -730,6 +749,11 @@ async def _handle_guild_message(message: discord.Message) -> None:
 
     m = _HITLIST_RE.match(message.content.strip())
     if m is None:
+        return
+
+    block = moderation_module.get_block(message.author.id)
+    if block is not None:
+        await moderation_module.notify_message(message, block)
         return
 
     if message.author.id != MAIN_OWNER_ID:
